@@ -19,7 +19,12 @@ export const credentialsSchema = z.object({
 
 function authSecret() {
   const secret = process.env.AUTH_SECRET;
-  if (!secret || secret.length < 32) throw new Error("AUTH_SECRET must be set to a random value of at least 32 characters.");
+  if (!secret || secret.length < 32) {
+    if (process.env.NODE_ENV !== "production") {
+      return "dev-fallback-auth-secret-32-chars-minimum-key";
+    }
+    throw new Error("AUTH_SECRET must be set to a random value of at least 32 characters.");
+  }
   return secret;
 }
 
@@ -80,13 +85,54 @@ export function clearSessionCookie(response: NextResponse) {
 }
 
 export function assertSameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
+  const secFetchSite = request.headers.get("sec-fetch-site");
+  if (secFetchSite === "same-origin" || secFetchSite === "none") return true;
+
+  const origin = request.headers.get("origin") ?? (request.headers.get("referer") ? new URL(request.headers.get("referer")!).origin : null);
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  if (!origin || !host) return false;
+
+  if (!origin) {
+    if (process.env.NODE_ENV !== "production") return true;
+    return false;
+  }
+
   try {
-    const expected = process.env.APP_URL ?? `${request.headers.get("x-forwarded-proto") ?? "http"}://${host}`;
-    return new URL(origin).origin === new URL(expected).origin;
-  } catch { return false; }
+    const originUrl = new URL(origin);
+
+    if (process.env.NODE_ENV !== "production") {
+      const hostname = originUrl.hostname;
+      if (
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname === "::1" ||
+        hostname.startsWith("192.168.") ||
+        hostname.startsWith("10.") ||
+        hostname.startsWith("172.16.") ||
+        hostname.endsWith(".local")
+      ) {
+        return true;
+      }
+    }
+
+    if (process.env.APP_URL) {
+      const appUrl = new URL(process.env.APP_URL);
+      if (originUrl.origin === appUrl.origin) return true;
+    }
+
+    if (host) {
+      const hostOnly = host.split(":")[0];
+      const hostPort = host.split(":")[1] ?? "";
+      const originPort = originUrl.port || (originUrl.protocol === "https:" ? "443" : "80");
+      const expectedPort = hostPort || (originUrl.protocol === "https:" ? "443" : "80");
+      if (originUrl.hostname === hostOnly && originPort === expectedPort) return true;
+    }
+
+    const proto = request.headers.get("x-forwarded-proto") ?? "http";
+    if (host && `${proto}://${host}` === originUrl.origin) return true;
+  } catch {
+    return false;
+  }
+  return false;
 }
 
 function clientAddress(request: Request) {
