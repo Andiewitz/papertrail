@@ -237,3 +237,70 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
   .history-table { margin-right: -18px; padding-right: 18px; }
   .history-table table { min-width: 570px; }
 }
+
+/* Refined timekeeping layout: connected surfaces with soft depth */
+.time-app { min-height: 100vh; padding: 0; background: #e9e7e2; }
+.time-shell { width: 100%; min-height: 100vh; margin: 0; grid-template-columns: 252px minmax(0, 1fr); border-radius: 0; box-shadow: none; transition: grid-template-columns .22s ease; }
+.time-shell.sidebar-collapsed { grid-template-columns: 78px minmax(0, 1fr); }
+.time-sidebar { position: relative; padding: 28px 20px 24px; background: #e7e5df; box-shadow: inset -1px 0 rgba(255,255,255,.82), 5px 0 16px rgba(82,78,70,.07); transition: padding .22s ease; }
+.sidebar-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; }
+.sidebar-toggle { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border: 0; border-radius: 10px; padding: 0; color: #67635e; background: #e7e5df; box-shadow: 4px 4px 9px rgba(152,148,139,.38), -4px -4px 9px rgba(255,255,255,.86); }
+.sidebar-toggle:hover { color: #2f706d; box-shadow: inset 2px 2px 5px rgba(154,150,142,.32), inset -2px -2px 5px rgba(255,255,255,.72); }
+.sidebar-toggle .time-icon { width: 17px; transition: transform .22s ease; }
+.employee-summary { margin: 42px 4px 36px; }
+.employee-summary > span { border-radius: 50%; box-shadow: 4px 4px 9px rgba(151,136,126,.3), -4px -4px 9px rgba(255,255,255,.8); }
+.time-nav { min-height: 44px; padding: 11px 12px; }
+.time-nav.active { background: #e7e5df; box-shadow: inset 3px 3px 7px rgba(153,149,141,.28), inset -3px -3px 7px rgba(255,255,255,.72); }
+.time-sidebar-footer button { min-height: 42px; padding: 0 10px; border-radius: 10px; }
+.time-sidebar-footer button:hover { box-shadow: inset 2px 2px 5px rgba(153,149,141,.25), inset -2px -2px 5px rgba(255,255,255,.68); }
+.sidebar-collapsed .time-sidebar { padding: 24px 13px; }
+.sidebar-collapsed .sidebar-brand-row { flex-direction: column; }
+.sidebar-collapsed .brand-label, .sidebar-collapsed .employee-copy, .sidebar-collapsed .nav-label, .sidebar-collapsed .sidebar-security, .sidebar-collapsed .logout-label { display: none; }
+.sidebar-collapsed .sidebar-toggle .time-icon { transform: rotate(180deg); }
+.sidebar-collapsed .employee-summary { justify-content: center; margin: 34px 0 30px; }
+.sidebar-collapsed .employee-summary > span { width: 42px; height: 42px; }
+.sidebar-collapsed .time-nav { width: 48px; justify-content: center; margin-inline: auto; padding: 0; }
+.sidebar-collapsed .time-sidebar-footer p { justify-content: center; }
+.sidebar-collapsed .time-sidebar-footer button { width: 48px; justify-content: center; padding: 0; }
+.time-workspace { padding: 42px clamp(30px, 5vw, 70px) 52px; background: #eeece7; }
+.time-header { max-width: 1120px; margin: 0 auto; }
+.time-header h1 { font-size: clamp(2.15rem, 3.5vw, 3.2rem); }
+.status-chip { border: 0; background: #eeece7; box-shadow: inset 2px 2px 5px rgba(161,157,148,.23), inset -2px -2px 5px rgba(255,255,255,.75); }
+.time-notice { max-width: 1120px; margin: 22px auto -3px; box-shadow: 3px 3px 8px rgba(154,149,140,.14), -3px -3px 8px rgba(255,255,255,.62); }
+.clock-card { max-width: 1120px; margin: 31px auto 0; border: 1px solid rgba(255,255,255,.55); padding: 30px 32px; background: #e4e7e2; box-shadow: 8px 8px 18px rgba(151,149,141,.26), -8px -8px 18px rgba(255,255,255,.73); }
+.clock-card::before { display: none; }
+.clock-card h2 { font-size: 1.85rem; }
+.clock-button { box-shadow: 5px 5px 11px rgba(124,126,118,.24), -4px -4px 10px rgba(255,255,255,.64); }
+.clock-button:active:not(:disabled) { transform: translateY(1px); box-shadow: inset 3px 3px 7px rgba(39,63,59,.25), inset -2px -2px 6px rgba(255,255,255,.18); }
+.time-metrics { max-width: 1120px; margin: 24px auto; gap: 0; overflow: hidden; border: 1px solid rgba(255,255,255,.58); border-radius: 18px; padding: 7px; background: #e9e7e2; box-shadow: 7px 7px 16px rgba(150,146,138,.22), -7px -7px 16px rgba(255,255,255,.7); }
+.time-metrics article { min-height: 122px; border: 0; border-right: 1px solid rgba(123,118,110,.1); border-radius: 0; padding: 16px 20px; background: transparent; }
+.time-metrics article:last-child { border-right: 0; }
+.time-metrics article > span { color: #555e5a; background: #e9e7e2 !important; box-shadow: inset 2px 2px 5px rgba(151,147,139,.27), inset -2px -2px 5px rgba(255,255,255,.74); }
+.time-metrics strong { font-size: 1.55rem; }
+.history-card { max-width: 1120px; margin: 24px auto 0; border: 1px solid rgba(255,255,255,.6); border-radius: 18px; background: #eceae5; box-shadow: 8px 8px 18px rgba(150,146,138,.22), -8px -8px 18px rgba(255,255,255,.72); }
+.history-heading button { border: 0; background: #eceae5; box-shadow: 3px 3px 7px rgba(151,147,139,.25), -3px -3px 7px rgba(255,255,255,.75); }
+.history-heading button:active { box-shadow: inset 2px 2px 5px rgba(151,147,139,.24), inset -2px -2px 5px rgba(255,255,255,.67); }
+.history-table td { border-top-color: rgba(118,113,105,.12); }
+.entry-active, .entry-complete { box-shadow: inset 2px 2px 4px rgba(109,104,96,.09); }
+
+@media (max-width: 980px) {
+  .time-shell, .time-shell.sidebar-collapsed { grid-template-columns: 1fr; }
+  .time-sidebar, .sidebar-collapsed .time-sidebar { min-height: auto; flex-direction: row; align-items: center; padding: 15px 20px; }
+  .sidebar-brand-row, .sidebar-collapsed .sidebar-brand-row { flex-direction: row; }
+  .sidebar-toggle { display: none; }
+  .sidebar-collapsed .brand-label, .sidebar-collapsed .logout-label { display: inline; }
+  .time-sidebar-footer button, .sidebar-collapsed .time-sidebar-footer button { width: 42px; height: 42px; justify-content: center; padding: 0; }
+  .sidebar-collapsed .logout-label { display: none; }
+  .time-workspace { padding: 34px 30px 44px; }
+}
+
+@media (max-width: 620px) {
+  .time-sidebar { padding: 14px 17px; }
+  .time-workspace { padding: 27px 18px 36px; }
+  .time-header h1 { font-size: 2.1rem; }
+  .clock-card { padding: 24px 21px; }
+  .time-metrics { display: grid; grid-template-columns: 1fr; padding: 5px 15px; }
+  .time-metrics article { min-height: 94px; border-right: 0; border-bottom: 1px solid rgba(123,118,110,.1); padding: 14px 4px; }
+  .time-metrics article:last-child { border-bottom: 0; }
+  .history-card { padding: 21px 17px; }
+}

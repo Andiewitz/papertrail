@@ -7,13 +7,14 @@ type User = { id: string; email: string };
 type TimeEntry = { id: number; clockIn: number; clockOut: number | null };
 type Notice = { type: "error" | "success"; text: string } | null;
 
-function Icon({ name }: { name: "clock" | "calendar" | "logout" | "check" | "briefcase" }) {
+function Icon({ name }: { name: "clock" | "calendar" | "logout" | "check" | "briefcase" | "panel" }) {
   const paths = {
     clock: <><circle cx="12" cy="12" r="8" /><path d="M12 7.5V12l3 2" /></>,
     calendar: <><rect x="4" y="5.5" width="16" height="14" rx="2" /><path d="M8 3.5v4M16 3.5v4M4 10h16" /></>,
     logout: <><path d="M10 5H5v14h5M14 8l4 4-4 4M18 12H9" /></>,
     check: <path d="m5 12 4 4 10-10" />,
     briefcase: <><rect x="4" y="7" width="16" height="12" rx="2" /><path d="M9 7V5h6v2M4 12h16M10 12v2h4v-2" /></>,
+    panel: <><rect x="3.5" y="4" width="17" height="16" rx="2" /><path d="M9 4v16M13 9l-3 3 3 3" /></>,
   };
   return <svg aria-hidden="true" className="time-icon" viewBox="0 0 24 24">{paths[name]}</svg>;
 }
@@ -41,6 +42,7 @@ export default function TimeDashboard() {
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [notice, setNotice] = useState<Notice>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   async function loadEntries() {
     setLoading(true);
@@ -62,6 +64,7 @@ export default function TimeDashboard() {
 
   useEffect(() => { if (user) void loadEntries(); }, [user]);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => { setSidebarCollapsed(window.localStorage.getItem("papertrail-sidebar") === "collapsed"); }, []);
 
   const activeEntry = entries.find((entry) => entry.clockOut === null) ?? null;
   const metrics = useMemo(() => {
@@ -99,6 +102,13 @@ export default function TimeDashboard() {
     else setNotice({ type: "error", text: "We couldn’t sign you out. Please try again." });
   }
 
+  function toggleSidebar() {
+    setSidebarCollapsed((collapsed) => {
+      window.localStorage.setItem("papertrail-sidebar", collapsed ? "expanded" : "collapsed");
+      return !collapsed;
+    });
+  }
+
   if (user === undefined) return <main className="time-loading"><span className="brand-mark"><i /><i /><i /></span><p>Loading your timecard…</p></main>;
   if (!user) return <AuthForm onAuthenticated={setUser} />;
 
@@ -106,12 +116,12 @@ export default function TimeDashboard() {
   const currentDate = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" }).format(new Date(now));
 
   return <main className="time-app">
-    <div className="time-shell">
+    <div className={`time-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
       <aside className="time-sidebar">
-        <div className="brand"><span className="brand-mark"><i /><i /><i /></span>Papertrail</div>
-        <div className="employee-summary"><span>{user.email[0].toUpperCase()}</span><div><strong>{employeeName}</strong><small>Papertrail portal</small></div></div>
-        <nav aria-label="Employee navigation"><a className="time-nav active" href="#dashboard"><Icon name="briefcase" />Dashboard</a><a className="time-nav" href="#history"><Icon name="calendar" />Time history</a></nav>
-        <div className="time-sidebar-footer"><p><Icon name="clock" /> Time entries are recorded securely.</p><button onClick={() => void signOut()} type="button"><Icon name="logout" />Sign out</button></div>
+        <div className="sidebar-brand-row"><div className="brand"><span className="brand-mark"><i /><i /><i /></span><span className="brand-label">Papertrail</span></div><button aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} className="sidebar-toggle" onClick={toggleSidebar} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} type="button"><Icon name="panel" /></button></div>
+        <div className="employee-summary"><span>{user.email[0].toUpperCase()}</span><div className="employee-copy"><strong>{employeeName}</strong><small>Employee portal</small></div></div>
+        <nav aria-label="Employee navigation"><a className="time-nav active" href="#dashboard" title="Dashboard"><Icon name="briefcase" /><span className="nav-label">Dashboard</span></a><a className="time-nav" href="#history" title="Time history"><Icon name="calendar" /><span className="nav-label">Time history</span></a></nav>
+        <div className="time-sidebar-footer"><p><Icon name="clock" /><span className="sidebar-security">Time entries are recorded securely.</span></p><button onClick={() => void signOut()} title="Sign out" type="button"><Icon name="logout" /><span className="logout-label">Sign out</span></button></div>
       </aside>
       <section className="time-workspace" id="dashboard">
         <header className="time-header"><div><p>{currentDate}</p><h1>Welcome back, {employeeName}.</h1></div><div className="status-chip"><span className={activeEntry ? "online" : "offline"} />{activeEntry ? "Clocked in" : "Clocked out"}</div></header>
