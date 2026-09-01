@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Turso Notes",
-  description: "A serverless Next.js starter backed by Turso.",
+  title: "Papertrail",
+  description: "A calmer, private workspace for your notes and ideas.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

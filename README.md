@@ -1,6 +1,6 @@
-# Turso Next.js starter
+# Papertrail
 
-A serverless Next.js App Router starter with a small notes CRUD API backed by Turso/libSQL.
+A calm, private workspace application built with Next.js and Turso/libSQL.
 
 ## Run locally
 
@@ -20,7 +20,7 @@ A serverless Next.js App Router starter with a small notes CRUD API backed by Tu
    npm run dev
    ```
 
-Open http://localhost:3000. The first request creates the tables. This starter assumes a fresh database; for an existing database, introduce versioned migrations before deployment.
+Open http://localhost:3000. The first request creates the tables, including `time_entries`. This starter assumes a fresh database; for an existing database, introduce versioned migrations before deployment.
 
 ## Authentication and security
 
@@ -28,7 +28,7 @@ Open http://localhost:3000. The first request creates the tables. This starter a
 - Passwords are salted and hashed with Node's `scrypt` (N=16384, r=8, p=1); plaintext passwords are never stored.
 - Sessions use random opaque tokens. Only their SHA-256 hashes are stored in Turso; the token is held in an `HttpOnly`, `Secure` (in production), `SameSite=Lax` cookie.
 - Authentication endpoints are protected by a same-origin check and shared database rate limits (5 sign-ups/hour and 10 sign-ins/15 minutes per hashed client address). `Retry-After` is returned when limited.
-- Notes are scoped to the signed-in user at query time.
+- Time entries are scoped to the signed-in employee. A database-level partial unique index prevents more than one open shift per employee.
 
 Before a public launch, add email verification, password-reset flows, monitoring, and an account-recovery policy appropriate to your product.
 
