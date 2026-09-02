@@ -4,6 +4,25 @@ import { FormEvent, useRef, useState } from "react";
 
 type User = { id: string; email: string };
 type FieldErrors = Partial<Record<"email" | "password" | "confirmPassword" | "form", string>>;
+type AuthErrorResponse = { error?: string; code?: string; debug?: string };
+
+function formatAuthError(response: Response, data: AuthErrorResponse) {
+  const message = data.error ?? "We couldn’t complete that request. Please try again.";
+  if (process.env.NODE_ENV === "production") return message;
+
+  const detail = data.code ?? "AUTH_UNKNOWN";
+  const debug = data.debug ? ` Debug: ${data.debug}` : "";
+  if (data.code === "AUTH_INVALID_CREDENTIALS") {
+    return `${message} [${response.status} · ${detail}] Check the exact email/password, and confirm this is the same local database where the account was created.${debug}`;
+  }
+  if (data.code === "AUTH_INVALID_ORIGIN") {
+    return `${message} [${response.status} · ${detail}] Open the app from its local URL instead of a file, proxy, or different host.${debug}`;
+  }
+  if (data.code === "AUTH_RATE_LIMITED") {
+    return `${message} [${response.status} · ${detail}] Retry after the displayed wait time.${debug}`;
+  }
+  return `${message} [${response.status} · ${detail}]${debug}`;
+}
 
 function EyeIcon({ open }: { open: boolean }) {
   return open ? <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 4.2A10.7 10.7 0 0 1 12 4c5.5 0 9.4 5.2 9.4 8s-1.5 4.4-3.7 5.9M6.2 6.2C4.1 7.7 2.6 10 2.6 12c0 2.8 3.9 8 9.4 8 1 0 1.9-.2 2.8-.5" /></svg> : <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2.6 12S6.5 4 12 4s9.4 8 9.4 8-3.9 8-9.4 8-9.4-8-9.4-8Z" /><circle cx="12" cy="12" r="3" /></svg>;
@@ -45,17 +64,18 @@ export default function AuthForm({ onAuthenticated }: { onAuthenticated: (user: 
     setSubmitting(true);
     try {
       const response = await fetch(`/api/auth/${mode}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: email.trim(), password }) });
-      const data = await response.json().catch(() => ({}));
+      const data: AuthErrorResponse & { user?: User } = await response.json().catch(() => ({}));
       if (!response.ok) {
-        if (response.status === 401) throw new Error("That email and password combination isn’t correct.");
-        if (response.status === 409) throw new Error("An account with that email already exists. Try signing in instead.");
+        if (response.status === 401) throw new Error(formatAuthError(response, data));
+        if (response.status === 409) throw new Error(`${formatAuthError(response, data)} Try signing in instead.`);
         if (response.status === 429) {
           const wait = Number(response.headers.get("Retry-After") ?? 60);
-          throw new Error(`Too many attempts. Try again in about ${Math.max(1, Math.ceil(wait / 60))} minute${wait > 60 ? "s" : ""}.`);
+          throw new Error(`${formatAuthError(response, data)} Try again in about ${Math.max(1, Math.ceil(wait / 60))} minute${wait > 60 ? "s" : ""}.`);
         }
-        if (response.status >= 500) throw new Error("Papertrail is temporarily unavailable. Please try again in a moment.");
-        throw new Error(data.error ?? "We couldn’t complete that request. Please try again.");
+        if (response.status >= 500) throw new Error(formatAuthError(response, data));
+        throw new Error(formatAuthError(response, data));
       }
+      if (!data.user) throw new Error("The server returned success without a user record. [200 · AUTH_MISSING_USER]");
       onAuthenticated(data.user);
     } catch (caught) { setErrors({ form: caught instanceof Error ? caught.message : "We couldn’t complete that request. Please try again." }); }
     finally { setSubmitting(false); }

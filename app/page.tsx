@@ -1,6 +1,6 @@
-import Notes from "@/client/notes";
+import TimeDashboard from "@/client/time-dashboard";
 
 export default function Home() {
-  return <Notes />;
+  return <TimeDashboard />;
 }
 
