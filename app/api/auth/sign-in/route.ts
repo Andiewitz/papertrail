@@ -1,4 +1,4 @@
-import { assertSameOrigin, createSession, enforceRateLimit, hashPassword, setSessionCookie, signInCredentialsSchema, verifyPassword } from "@/lib/auth";
+import { assertSameOrigin, authFailure, createSession, enforceRateLimit, hashPassword, setSessionCookie, signInCredentialsSchema, verifyPassword } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextResponse } from "next/server";
 
@@ -22,6 +22,6 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Sign-in failed", error);
     const debug = process.env.NODE_ENV !== "production" && error instanceof Error ? { debug: error.message } : {};
-    return NextResponse.json({ error: "Sign-in is temporarily unavailable. Please try again.", code: "AUTH_SIGN_IN_FAILED", ...debug }, { status: 500 });
+    return NextResponse.json({ ...authFailure(error, "AUTH_SIGN_IN_FAILED"), ...debug }, { status: 500 });
   }
 }

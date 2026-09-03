@@ -8,9 +8,9 @@ type AuthErrorResponse = { error?: string; code?: string; debug?: string };
 
 function formatAuthError(response: Response, data: AuthErrorResponse) {
   const message = data.error ?? "We couldn’t complete that request. Please try again.";
-  if (process.env.NODE_ENV === "production") return message;
-
   const detail = data.code ?? "AUTH_UNKNOWN";
+  if (process.env.NODE_ENV === "production") return data.code ? `${message} [${detail}]` : message;
+
   const debug = data.debug ? ` Debug: ${data.debug}` : "";
   if (data.code === "AUTH_INVALID_CREDENTIALS") {
     return `${message} [${response.status} · ${detail}] Check the exact email/password, and confirm this is the same local database where the account was created.${debug}`;

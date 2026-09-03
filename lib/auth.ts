@@ -163,3 +163,20 @@ export async function enforceRateLimit(request: Request, scope: string, maxAttem
 }
 
 export function newUserId() { return randomUUID(); }
+
+export function authFailure(error: unknown, fallbackCode: string) {
+  const detail = error instanceof Error ? error.message : "";
+  if (detail.includes("TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must be set")) {
+    return { code: "AUTH_DATABASE_CONFIGURATION", error: "Database configuration is incomplete. Check the Turso URL and token in Vercel." };
+  }
+  if (detail.includes("AUTH_SECRET must be set")) {
+    return { code: "AUTH_SECRET_CONFIGURATION", error: "Authentication configuration is incomplete. Check AUTH_SECRET in Vercel." };
+  }
+  if (/auth token|unauthori[sz]ed|forbidden/i.test(detail)) {
+    return { code: "AUTH_DATABASE_AUTH_FAILED", error: "The Turso database rejected its authentication token." };
+  }
+  if (/fetch failed|connect|timeout|network|ENOTFOUND|ECONN/i.test(detail)) {
+    return { code: "AUTH_DATABASE_UNAVAILABLE", error: "The app could not reach the Turso database." };
+  }
+  return { code: fallbackCode, error: "Authentication is temporarily unavailable. Please try again." };
+}
