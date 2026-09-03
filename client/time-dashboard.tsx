@@ -88,13 +88,19 @@ export default function TimeDashboard() {
     setBusy(true);
     setNotice(null);
     try {
-      const response = await fetch("/api/time", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }) });
+      const response = await fetch("/api/time", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, ...(activeEntry ? { entryId: activeEntry.id } : {}) }) });
       const data = await response.json();
       if (response.status === 401) { setUser(null); return; }
-      if (!response.ok) throw new Error(data.error ?? "Your time entry could not be updated.");
-      setEntries((current) => action === "clock-in" ? [data.entry, ...current] : current.map((entry) => entry.id === data.entry.id ? data.entry : entry));
+      if (!response.ok) {
+        if (response.status === 409) void loadEntries();
+        throw new Error(data.error ?? "Your time entry could not be updated.");
+      }
+      setEntries((current) => {
+        const withoutUpdatedEntry = current.filter((entry) => entry.id !== data.entry.id);
+        return action === "clock-in" ? [data.entry, ...withoutUpdatedEntry] : [...withoutUpdatedEntry, data.entry].sort((left, right) => right.clockIn - left.clockIn);
+      });
       setNow(Date.now());
-      setNotice({ type: "success", text: action === "clock-in" ? "You’re clocked in. Have a great shift." : "You’re clocked out. Your hours have been recorded." });
+      setNotice({ type: "success", text: action === "clock-in" ? data.alreadyClockedIn ? "Your active shift is already recorded." : "You’re clocked in. Have a great shift." : data.alreadyClockedOut ? "Your clock-out was already recorded." : "You’re clocked out. Your hours have been recorded." });
     } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Your time entry could not be updated." }); }
     finally { setBusy(false); }
   }
