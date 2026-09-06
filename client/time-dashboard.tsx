@@ -65,7 +65,7 @@ export default function TimeDashboard() {
       const response = await fetch(`/api/collabs/${selectedCollab.id}/time`, { cache: "no-store" });
       const data = await response.json();
       if (response.status === 401) { setUser(null); return; }
-      if (!response.ok) throw new Error(data.error ?? "Attendance records could not be loaded.");
+      if (!response.ok) throw new Error(`${data.error ?? "Attendance records could not be loaded."}${data.debug ? ` (${data.debug})` : ""}`);
       setEntries(data.entries);
     } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Attendance records could not be loaded." }); }
     finally { setLoading(false); }
@@ -87,6 +87,11 @@ export default function TimeDashboard() {
       setSelectedCollab(next.find((collab) => collab.id === saved) ?? next[0] ?? null);
     }).catch((error) => { setCollabs([]); setNotice({ type: "error", text: error instanceof Error ? error.message : "Your Collabs could not be loaded." }); });
   }, [user]);
+  useEffect(() => {
+    if (!collabs?.length || !selectedCollab || collabs.some((collab) => collab.id === selectedCollab.id)) return;
+    setSelectedCollab(collabs[0]);
+    window.localStorage.setItem("papertrail-collab", collabs[0].id);
+  }, [collabs, selectedCollab]);
   useEffect(() => { if (user && selectedCollab) void loadEntries(); }, [user, selectedCollab]);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30000); return () => window.clearInterval(timer); }, []);
   useEffect(() => { setSidebarCollapsed(window.localStorage.getItem("papertrail-sidebar") === "collapsed"); }, []);

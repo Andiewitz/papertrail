@@ -44,7 +44,8 @@ export async function GET(request: Request) {
   } catch (error) {
     logError("time_entries_load_failed", error);
     if (error instanceof CollabAccessError) return NextResponse.json({ error: error.message, code: error.code }, { status: 403 });
-    return NextResponse.json({ error: "Your attendance records could not be loaded." }, { status: 500 });
+    const debug = process.env.NODE_ENV !== "production" && error instanceof Error ? { debug: error.message } : {};
+    return NextResponse.json({ error: "Your attendance records could not be loaded.", code: "TIME_ENTRIES_LOAD_FAILED", ...debug }, { status: 500 });
   }
 }
 
@@ -98,6 +99,7 @@ export async function POST(request: Request) {
   } catch (error) {
     logError("time_entry_update_failed", error);
     if (error instanceof CollabAccessError) return NextResponse.json({ error: error.message, code: error.code }, { status: 403 });
-    return NextResponse.json({ error: "Your time entry could not be updated. Please try again." }, { status: 500 });
+    const debug = process.env.NODE_ENV !== "production" && error instanceof Error ? { debug: error.message } : {};
+    return NextResponse.json({ error: "Your time entry could not be updated. Please try again.", code: "TIME_ENTRY_UPDATE_FAILED", ...debug }, { status: 500 });
   }
 }
