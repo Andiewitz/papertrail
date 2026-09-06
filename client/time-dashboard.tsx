@@ -5,7 +5,8 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import AuthForm from "@/client/auth-form";
 
 type User = { id: string; email: string };
-type TimeEntry = { id: number; clockIn: number; clockOut: number | null };
+type Break = { id: number; startedAt: number; endedAt: number | null };
+type TimeEntry = { id: number; clockIn: number; clockOut: number | null; breaks: Break[] };
 type Notice = { type: "error" | "success"; text: string } | null;
 
 function Icon({ name }: { name: "clock" | "calendar" | "logout" | "check" | "briefcase" | "panel" }) {
@@ -70,12 +71,13 @@ export default function TimeDashboard() {
   useEffect(() => { setSidebarCollapsed(window.localStorage.getItem("papertrail-sidebar") === "collapsed"); }, []);
 
   const activeEntry = entries.find((entry) => entry.clockOut === null) ?? null;
+  const activeBreak = activeEntry?.breaks.find((item) => item.endedAt === null) ?? null;
   const metrics = useMemo(() => {
     const today = new Date(now);
     const weekStart = startOfWeek(today).getTime();
     const month = today.getMonth();
     const year = today.getFullYear();
-    const duration = (entry: TimeEntry) => (entry.clockOut ?? now) - entry.clockIn;
+    const duration = (entry: TimeEntry) => Math.max(0, (entry.clockOut ?? now) - entry.clockIn - entry.breaks.reduce((total, item) => total + Math.max(0, (item.endedAt ?? now) - item.startedAt), 0));
     return {
       today: entries.filter((entry) => sameDay(new Date(entry.clockIn), today)).reduce((total, entry) => total + duration(entry), 0),
       week: entries.filter((entry) => entry.clockIn >= weekStart).reduce((total, entry) => total + duration(entry), 0),
@@ -102,6 +104,20 @@ export default function TimeDashboard() {
       setNow(Date.now());
       setNotice({ type: "success", text: action === "clock-in" ? data.alreadyClockedIn ? "Your active shift is already recorded." : "You’re clocked in. Have a great shift." : data.alreadyClockedOut ? "Your clock-out was already recorded." : "You’re clocked out. Your hours have been recorded." });
     } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Your time entry could not be updated." }); }
+    finally { setBusy(false); }
+  }
+
+  async function updateBreak() {
+    if (!activeEntry) return;
+    setBusy(true); setNotice(null);
+    try {
+      const response = await fetch("/api/time", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: activeBreak ? "break-end" : "break-start" }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Your break could not be updated.");
+      setEntries((current) => current.map((item) => item.id === data.entry.id ? data.entry : item));
+      setNow(Date.now());
+      setNotice({ type: "success", text: activeBreak ? "Your break has ended. You’re back on the clock." : "Your break has started. Paid time is paused." });
+    } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Your break could not be updated." }); }
     finally { setBusy(false); }
   }
 
@@ -133,9 +149,9 @@ export default function TimeDashboard() {
         <div className="time-sidebar-footer"><p><Icon name="clock" /><span className="sidebar-security">Time entries are recorded securely.</span></p><button onClick={() => void signOut()} title="Sign out" type="button"><Icon name="logout" /><span className="logout-label">Sign out</span></button></div>
       </aside>
       <section className="time-workspace" id="dashboard">
-        <motion.header animate={{ opacity: 1, y: 0 }} className="time-header" initial={entrance} transition={{ duration: .42, ease: "easeOut" }}><div><p>{currentDate}</p><h1>Welcome back, {employeeName}.</h1></div><div className="status-chip"><span className={activeEntry ? "online" : "offline"} />{activeEntry ? "Clocked in" : "Clocked out"}</div></motion.header>
+        <motion.header animate={{ opacity: 1, y: 0 }} className="time-header" initial={entrance} transition={{ duration: .42, ease: "easeOut" }}><div><p>{currentDate}</p><h1>Welcome back, {employeeName}.</h1></div><div className="status-chip"><span className={activeEntry && !activeBreak ? "online" : "offline"} />{activeBreak ? "On break" : activeEntry ? "Clocked in" : "Clocked out"}</div></motion.header>
         <AnimatePresence mode="wait">{notice && <motion.div animate={{ opacity: 1, height: "auto" }} className={`time-notice ${notice.type}`} exit={{ opacity: 0, height: 0 }} initial={{ opacity: 0, height: 0 }} role={notice.type === "error" ? "alert" : "status"}><span>{notice.type === "success" ? <Icon name="check" /> : "!"}</span>{notice.text}<button aria-label="Dismiss" onClick={() => setNotice(null)} type="button">×</button></motion.div>}</AnimatePresence>
-        <motion.section animate={{ opacity: 1, y: 0 }} className="clock-card" initial={entrance} transition={{ duration: .45, delay: .08, ease: "easeOut" }}><div className="clock-card-copy"><p className="section-kicker">Today’s time</p><h2>{activeEntry ? "Your shift is in progress" : "Ready when you are"}</h2><p>{activeEntry ? `Clocked in at ${new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(activeEntry.clockIn))}` : "Clock in when you begin work. Your current time is recorded automatically."}</p>{activeEntry && <strong>{toDuration(now - activeEntry.clockIn)} <small>this shift</small></strong>}</div><motion.button whileTap={reduceMotion ? undefined : { scale: .98 }} className={`clock-button ${activeEntry ? "clock-out" : "clock-in"}`} disabled={busy} onClick={() => void updateClock()} type="button"><Icon name="clock" />{busy ? "Updating…" : activeEntry ? "Clock out" : "Clock in"}</motion.button></motion.section>
+        <motion.section animate={{ opacity: 1, y: 0 }} className="clock-card" initial={entrance} transition={{ duration: .45, delay: .08, ease: "easeOut" }}><div className="clock-card-copy"><p className="section-kicker">Today’s time</p><h2>{activeBreak ? "Your break is in progress" : activeEntry ? "Your shift is in progress" : "Ready when you are"}</h2><p>{activeEntry ? `Clocked in at ${new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(activeEntry.clockIn))}` : "Clock in when you begin work. Your current time is recorded automatically."}</p>{activeEntry && <strong>{toDuration((now - activeEntry.clockIn) - activeEntry.breaks.reduce((total, item) => total + ((item.endedAt ?? now) - item.startedAt), 0))} <small>paid this shift</small></strong>}</div><div className="clock-actions">{activeEntry && <motion.button whileTap={reduceMotion ? undefined : { scale: .98 }} className="clock-button break-button" disabled={busy} onClick={() => void updateBreak()} type="button">{busy ? "Updating…" : activeBreak ? "End break" : "Start break"}</motion.button>}<motion.button whileTap={reduceMotion ? undefined : { scale: .98 }} className={`clock-button ${activeEntry ? "clock-out" : "clock-in"}`} disabled={busy || Boolean(activeBreak)} onClick={() => void updateClock()} type="button"><Icon name="clock" />{busy ? "Updating…" : activeEntry ? "Clock out" : "Clock in"}</motion.button></div></motion.section>
         <motion.section animate={{ opacity: 1, y: 0 }} className="time-metrics" initial={entrance} transition={{ duration: .45, delay: .15, ease: "easeOut" }} aria-label="Hours summary">{[["clock", "Today", toDuration(metrics.today), activeEntry ? "Currently working" : "No active shift"], ["calendar", "This week", toDuration(metrics.week), "Monday to today"], ["briefcase", "This month", toDuration(metrics.month), "All recorded shifts"]].map(([icon, label, total, caption], index) => <motion.article animate={{ opacity: 1, y: 0 }} initial={entrance} key={label} transition={{ duration: .35, delay: .2 + index * .07, ease: "easeOut" }}><span><Icon name={icon as "clock" | "calendar" | "briefcase"} /></span><p>{label}</p><strong>{total}</strong><small>{caption}</small></motion.article>)}</motion.section>
         <motion.section animate={{ opacity: 1, y: 0 }} className="history-card" id="history" initial={entrance} transition={{ duration: .45, delay: .34, ease: "easeOut" }}><div className="history-heading"><div><p className="section-kicker">Attendance</p><h2>Recent time entries</h2></div><button onClick={() => void loadEntries()} type="button">Refresh</button></div>{loading ? <div className="history-loading"><i /><i /><i /></div> : entries.length === 0 ? <div className="no-entries"><Icon name="calendar" /><h3>No time entries yet</h3><p>Your clock-ins and clock-outs will appear here.</p></div> : <div className="history-table" role="region" aria-label="Recent time entries" tabIndex={0}><table><thead><tr><th>Date</th><th>Clock in</th><th>Clock out</th><th>Total</th><th>Status</th></tr></thead><tbody>{entries.map((entry) => <tr key={entry.id}><td>{new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric" }).format(new Date(entry.clockIn))}</td><td>{new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(entry.clockIn))}</td><td>{entry.clockOut ? new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(entry.clockOut)) : "—"}</td><td>{toDuration((entry.clockOut ?? now) - entry.clockIn)}</td><td><span className={entry.clockOut ? "entry-complete" : "entry-active"}>{entry.clockOut ? "Completed" : "In progress"}</span></td></tr>)}</tbody></table></div>}</motion.section>
       </section>

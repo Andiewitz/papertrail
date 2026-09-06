@@ -71,7 +71,7 @@ try {
   const health = await json(await fetch(`${baseUrl}/api/health`), 200, "health check");
   assert.equal(health.ok, true);
   assert.equal(health.database, "connected");
-  assert.equal(health.migrations, 2);
+  assert.equal(health.migrations, 3);
 
   const noSession = await json(await fetch(`${baseUrl}/api/auth/session`), 200, "anonymous session");
   assert.equal(noSession.user, null);
@@ -140,6 +140,26 @@ try {
   }), 200, "duplicate clock in");
   assert.equal(duplicateClockIn.alreadyClockedIn, true);
   assert.equal(duplicateClockIn.entry.id, clockIn.entry.id);
+
+  const breakStart = await json(await fetch(`${baseUrl}/api/time`, {
+    method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "break-start" }),
+  }), 201, "start break");
+  assert.equal(breakStart.entry.breaks.length, 1);
+  assert.equal(breakStart.entry.breaks[0].endedAt, null);
+
+  const duplicateBreakStart = await json(await fetch(`${baseUrl}/api/time`, {
+    method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "break-start" }),
+  }), 200, "duplicate break start");
+  assert.equal(duplicateBreakStart.alreadyOnBreak, true);
+
+  await json(await fetch(`${baseUrl}/api/time`, {
+    method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "clock-out", entryId: clockIn.entry.id }),
+  }), 409, "clock out with active break");
+
+  const breakEnd = await json(await fetch(`${baseUrl}/api/time`, {
+    method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "break-end" }),
+  }), 200, "end break");
+  assert.notEqual(breakEnd.entry.breaks[0].endedAt, null);
 
   const clockOut = await json(await fetch(`${baseUrl}/api/time`, {
     method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "clock-out", entryId: clockIn.entry.id }),

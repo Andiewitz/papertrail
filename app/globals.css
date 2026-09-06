@@ -333,6 +333,9 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .clock-card { border: 1px solid #dfe5df; background: #e2f0ed; box-shadow: 0 14px 30px rgba(50, 92, 89, .13); }
 .clock-card-copy strong { border: 0; background: transparent; box-shadow: none; }
 .clock-button { box-shadow: 0 9px 17px rgba(47, 99, 95, .24); }
+.clock-actions { display: flex; align-items: center; gap: 12px; }
+.break-button { color: #645b51; background: #fff; box-shadow: 0 7px 14px rgba(69, 66, 60, .13); }
+.break-button:hover:not(:disabled) { color: #3e756f; background: #f8fcfb; }
 .clock-out { box-shadow: 0 9px 17px rgba(168, 81, 70, .22); }
 .time-metrics { gap: 15px; overflow: visible; border: 0; padding: 0; background: transparent; box-shadow: none; }
 .time-metrics article { border: 1px solid #e0dfdb; border-radius: 17px; background: #fff; box-shadow: 0 9px 20px rgba(69, 66, 60, .09); }

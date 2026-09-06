@@ -10,7 +10,7 @@ The employee timekeeping flow has server-side authentication, password hashing, 
 | P0 | Tables are created during application requests. | Replace runtime DDL with versioned migrations and a deploy-time migration job. |
 | P0 | Production database and auth configuration is manual and failures are hard to observe. | Add a non-secret health check, structured logs, error monitoring, and a deployment smoke test. |
 | P1 | Workforce controls need a browser UI and email delivery. | Organizations, memberships, invitation-only enrollment, role checks, directory API, and deactivation are implemented. Add verified-email delivery and administrator screens. |
-| P1 | Attendance has no break, correction, approval, or time-zone policy. | Model shifts, breaks, adjustments, approvals, and organization-level time zone/workweek settings. |
+| P1 | Attendance still needs corrections, approvals, and payroll-period policy. | Explicit, idempotent break records and paid-time calculation are implemented; add adjustments, approvals, exports, and payroll-period rules. |
 | P1 | Notes APIs remain from the starter application. | Remove them or finish and explicitly scope them; do not retain an unsupported parallel feature. |
 | P1 | `npm audit --omit=dev` reports Next/PostCSS advisories. | Upgrade Next in a dedicated compatibility branch, then rerun production and browser regression tests. |
 | P2 | No observability, retention, export, or support operations. | Add audit events, CSV exports, data-retention rules, incident playbooks, and backup/restore drills. |
