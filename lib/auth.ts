@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { ConfigurationError, authSecret } from "@/lib/config";
 
 const scrypt = promisify(scryptCallback);
 const COOKIE_NAME = "session";
@@ -24,17 +25,6 @@ export const signInCredentialsSchema = credentialsSchema.extend({
 export const signUpCredentialsSchema = credentialsSchema.extend({
   password: z.string().min(12, "Use at least 12 characters.").max(128),
 });
-
-function authSecret() {
-  const secret = process.env.AUTH_SECRET;
-  if (!secret || secret.length < 32) {
-    if (process.env.NODE_ENV !== "production") {
-      return "dev-fallback-auth-secret-32-chars-minimum-key";
-    }
-    throw new Error("AUTH_SECRET must be set to a random value of at least 32 characters.");
-  }
-  return secret;
-}
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -166,10 +156,10 @@ export function newUserId() { return randomUUID(); }
 
 export function authFailure(error: unknown, fallbackCode: string) {
   const detail = error instanceof Error ? error.message : "";
-  if (detail.includes("TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must be set")) {
+  if (error instanceof ConfigurationError && error.code === "DATABASE_CONFIGURATION") {
     return { code: "AUTH_DATABASE_CONFIGURATION", error: "Database configuration is incomplete. Check the Turso URL and token in Vercel." };
   }
-  if (detail.includes("AUTH_SECRET must be set")) {
+  if (error instanceof ConfigurationError && error.code === "AUTH_SECRET_CONFIGURATION") {
     return { code: "AUTH_SECRET_CONFIGURATION", error: "Authentication configuration is incomplete. Check AUTH_SECRET in Vercel." };
   }
   if (/auth token|unauthori[sz]ed|forbidden/i.test(detail)) {

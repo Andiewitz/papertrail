@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:status": "node scripts/migrate.mjs --status",
     "test:integration": "node scripts/integration-test.mjs",
     "verify": "npm run lint && npm run typecheck && npm run build && npm run test:integration"
   },

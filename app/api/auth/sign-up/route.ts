@@ -1,5 +1,6 @@
 import { assertSameOrigin, authFailure, createSession, enforceRateLimit, hashPassword, newUserId, setSessionCookie, signUpCredentialsSchema } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { logError } from "@/lib/log";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
     setSessionCookie(response, await createSession(user.id));
     return response;
   } catch (error) {
-    console.error("Sign-up failed", error);
+    logError("auth_sign_up_failed", error);
     const debug = process.env.NODE_ENV !== "production" && error instanceof Error ? { debug: error.message } : {};
     return NextResponse.json({ ...authFailure(error, "AUTH_SIGN_UP_FAILED"), ...debug }, { status: 500 });
   }

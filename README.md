@@ -12,15 +12,16 @@ A calm, private workspace application built with Next.js and Turso/libSQL.
    turso db tokens create turso-next-starter
    ```
 
-2. Copy `.env.example` to `.env.local` and set the database URL, token, and a generated `AUTH_SECRET`. Set `APP_URL` to your stable production origin when deployed.
+2. Copy `.env.example` to `.env.local` and set the database URL, token, and a generated `AUTH_SECRET`. Set `APP_URL` to your stable production origin when deployed. For a zero-configuration local database, omit the Turso variables and use `LOCAL_DATABASE_URL=file:local.db`.
 3. Install and run:
 
    ```sh
    npm install
+   npm run db:migrate
    npm run dev
    ```
 
-Open http://localhost:3000. The first request creates the tables, including `time_entries`. This starter assumes a fresh database; for an existing database, introduce versioned migrations before deployment.
+Open http://localhost:3000. `npm run db:migrate` applies every versioned database change exactly once; use `npm run db:status` to inspect what is applied.
 
 ## Authentication and security
 
@@ -44,4 +45,11 @@ The included `vercel.json` uses Vercel's Next.js build pipeline. Import this rep
 
 Set `APP_URL` only for the Production environment after attaching your stable custom domain (for example, `https://notes.example.com`). Preview deployments intentionally derive their origin from Vercel so their authentication flow keeps working.
 
-Deploy from the Vercel dashboard or run `npx vercel` after signing in. Never put any of these values in `NEXT_PUBLIC_*` variables or commit `.env.local`.
+Before the first production deployment, run the migrations once from a machine that has your production Turso credentials:
+
+```sh
+$env:NODE_ENV = "production"
+npm run db:migrate
+```
+
+Deploy from the Vercel dashboard or run `npx vercel` after signing in. `GET /api/health` verifies runtime configuration, database connectivity, and migration availability (it returns no credentials). Never put these values in `NEXT_PUBLIC_*` variables or commit `.env.local`.

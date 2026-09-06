@@ -44,15 +44,22 @@ async function json(response, expectedStatus, label) {
 const port = await findFreePort();
 const baseUrl = `http://127.0.0.1:${port}`;
 const nextBin = path.join(root, "node_modules", "next", "dist", "bin", "next");
+const runtimeEnv = {
+  ...process.env,
+  AUTH_SECRET: "integration-test-secret-that-is-at-least-32-characters",
+  LOCAL_DATABASE_URL: databaseUrl,
+  NEXT_TELEMETRY_DISABLED: "1",
+};
 let output = "";
+const migration = spawn(process.execPath, [path.join(root, "scripts", "migrate.mjs")], { cwd: root, env: runtimeEnv, stdio: ["ignore", "pipe", "pipe"] });
+let migrationOutput = "";
+migration.stdout.on("data", (chunk) => { migrationOutput += chunk; });
+migration.stderr.on("data", (chunk) => { migrationOutput += chunk; });
+const [migrationCode] = await once(migration, "exit");
+assert.equal(migrationCode, 0, `Migration failed before integration test.\n${migrationOutput}`);
 const server = spawn(process.execPath, [nextBin, "dev", "-p", String(port)], {
   cwd: root,
-  env: {
-    ...process.env,
-    AUTH_SECRET: "integration-test-secret-that-is-at-least-32-characters",
-    LOCAL_DATABASE_URL: databaseUrl,
-    NEXT_TELEMETRY_DISABLED: "1",
-  },
+  env: runtimeEnv,
   stdio: ["ignore", "pipe", "pipe"],
 });
 server.stdout.on("data", (chunk) => { output += chunk; });
@@ -60,6 +67,11 @@ server.stderr.on("data", (chunk) => { output += chunk; });
 
 try {
   await waitForServer(baseUrl, () => output);
+
+  const health = await json(await fetch(`${baseUrl}/api/health`), 200, "health check");
+  assert.equal(health.ok, true);
+  assert.equal(health.database, "connected");
+  assert.equal(health.migrations, 1);
 
   const noSession = await json(await fetch(`${baseUrl}/api/auth/session`), 200, "anonymous session");
   assert.equal(noSession.user, null);

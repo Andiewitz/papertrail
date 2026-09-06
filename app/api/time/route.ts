@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import type { Row } from "@libsql/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { logError } from "@/lib/log";
 
 export const runtime = "nodejs";
 
@@ -18,7 +19,7 @@ export async function GET() {
     const entries = result.rows.map(entry);
     return NextResponse.json({ entries, activeEntry: entries.find((item) => item.clockOut === null) ?? null });
   } catch (error) {
-    console.error("Could not load time entries", error);
+    logError("time_entries_load_failed", error);
     return NextResponse.json({ error: "Your attendance records could not be loaded." }, { status: 500 });
   }
 }
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: "You are not currently clocked in." }, { status: 409 });
   } catch (error) {
-    console.error("Could not update time entry", error);
+    logError("time_entry_update_failed", error);
     return NextResponse.json({ error: "Your time entry could not be updated. Please try again." }, { status: 500 });
   }
 }
