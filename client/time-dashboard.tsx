@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import AuthForm from "@/client/auth-form";
@@ -44,12 +44,14 @@ function startOfWeek(date: Date) {
   return copy;
 }
 
-export default function TimeDashboard() {
+export default function TimeDashboard({ collabId }: { collabId: string }) {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [collabs, setCollabs] = useState<Collab[] | undefined>(undefined);
   const [selectedCollab, setSelectedCollab] = useState<Collab | null>(null);
-  const [collabName, setCollabName] = useState("");
+  const [membersOpen, setMembersOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [members, setMembers] = useState<{ id: string; email: string; role: string; status: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -83,15 +85,14 @@ export default function TimeDashboard() {
     void fetch("/api/collabs", { cache: "no-store" }).then(async (response) => {
       const data = await response.json(); if (!response.ok) throw new Error(data.error);
       const next = data.collabs as Collab[]; setCollabs(next);
-      const saved = window.localStorage.getItem("papertrail-collab");
-      setSelectedCollab(next.find((collab) => collab.id === saved) ?? next[0] ?? null);
+      const selected = next.find((collab) => collab.id === collabId) ?? null;
+      setSelectedCollab(selected); if (selected) window.localStorage.setItem("papertrail-collab", selected.id);
     }).catch((error) => { setCollabs([]); setNotice({ type: "error", text: error instanceof Error ? error.message : "Your Collabs could not be loaded." }); });
-  }, [user]);
+  }, [user, collabId]);
   useEffect(() => {
-    if (!collabs?.length || !selectedCollab || collabs.some((collab) => collab.id === selectedCollab.id)) return;
-    setSelectedCollab(collabs[0]);
-    window.localStorage.setItem("papertrail-collab", collabs[0].id);
-  }, [collabs, selectedCollab]);
+    if (!collabs?.length || !selectedCollab || selectedCollab.id === collabId) return;
+    setSelectedCollab(collabs.find((collab) => collab.id === collabId) ?? null);
+  }, [collabs, selectedCollab, collabId]);
   useEffect(() => { if (user && selectedCollab) void loadEntries(); }, [user, selectedCollab]);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30000); return () => window.clearInterval(timer); }, []);
   useEffect(() => { setSidebarCollapsed(window.localStorage.getItem("papertrail-sidebar") === "collapsed"); }, []);
@@ -171,18 +172,11 @@ export default function TimeDashboard() {
     });
   }
 
-  async function createFirstCollab(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setNotice(null);
-    try {
-      const response = await fetch("/api/collabs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: collabName }) });
-      const data = await response.json(); if (!response.ok) throw new Error(data.error ?? "Your Collab could not be created.");
-      setCollabs([data.collab]); setSelectedCollab(data.collab); window.localStorage.setItem("papertrail-collab", data.collab.id);
-    } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Your Collab could not be created." }); } finally { setBusy(false); }
-  }
+  async function openMembers() { setMembersOpen(true); try { const response = await fetch(`/api/collabs/${collabId}/members`); const data = await response.json(); if (!response.ok) throw new Error(data.error); setMembers(data.members); } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Members could not be loaded." }); } }
 
   if (user === undefined || (user && collabs === undefined)) return <main className="time-loading"><span className="brand-mark"><i /><i /><i /></span><p>Loading your timecard…</p></main>;
   if (!user) return <AuthForm onAuthenticated={setUser} />;
-  if (!selectedCollab) return <main className="time-loading"><div className="auth-card"><p className="section-kicker">Get started</p><h2>Create your first Collab</h2><p className="auth-subtitle">A Collab is the private space where your team and time records live.</p><form className="auth-form" onSubmit={createFirstCollab}><fieldset disabled={busy}><label>Collab name<input autoFocus onChange={(event) => setCollabName(event.target.value)} placeholder="Acme Team" value={collabName} /></label>{notice && <p className="auth-error" role="alert">{notice.text}</p>}<button className="auth-submit" type="submit">{busy ? "Creating…" : "Create Collab"}</button></fieldset></form></div></main>;
+  if (!selectedCollab) return <main className="time-loading"><div className="auth-card"><p className="section-kicker">Collab unavailable</p><h2>You don’t have access to this Collab.</h2><Link className="auth-submit" href="/">Back to your Collabs</Link></div></main>;
 
   const employeeName = user.email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   const currentDate = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" }).format(new Date(now));
@@ -191,16 +185,18 @@ export default function TimeDashboard() {
     <div className={`time-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
       <aside className="time-sidebar">
         <div className="sidebar-brand-row"><div className="brand"><span className="brand-mark"><i /><i /><i /></span><span className="brand-label">Papertrail</span></div><button aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} className="sidebar-toggle" onClick={toggleSidebar} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} type="button"><Icon name="panel" /></button></div>
-        <div className="employee-summary"><span>{user.email[0].toUpperCase()}</span><div className="employee-copy"><strong>{employeeName}</strong><small>{selectedCollab.role.replace("_", "-")}</small></div></div><label className="collab-switcher"><span>Collab</span><select aria-label="Selected Collab" onChange={(event) => { const next = collabs?.find((collab) => collab.id === event.target.value) ?? null; setSelectedCollab(next); if (next) window.localStorage.setItem("papertrail-collab", next.id); }} value={selectedCollab.id}>{collabs?.map((collab) => <option key={collab.id} value={collab.id}>{collab.name}</option>)}</select></label>
-        <nav aria-label="Employee navigation"><Link className="time-nav active" href="/" title="Dashboard"><Icon name="briefcase" /><span className="nav-label">Dashboard</span></Link><Link className="time-nav" href="/history" title="Time history"><Icon name="calendar" /><span className="nav-label">Time history</span></Link></nav>
+        <div className="employee-summary"><span>{user.email[0].toUpperCase()}</span><div className="employee-copy"><strong>{employeeName}</strong><small>{selectedCollab.name} · {selectedCollab.role.replace("_", "-")}</small></div></div><Link className="collab-back" href="/">← All Collabs</Link>
+        <nav aria-label="Employee navigation"><Link className="time-nav active" href={`/collabs/${collabId}`} title="Dashboard"><Icon name="briefcase" /><span className="nav-label">Dashboard</span></Link><Link className="time-nav" href="/history" title="Time history"><Icon name="calendar" /><span className="nav-label">Time history</span></Link></nav>
         <div className="time-sidebar-footer"><p><Icon name="clock" /><span className="sidebar-security">Time entries are recorded securely.</span></p><button onClick={() => void signOut()} title="Sign out" type="button"><Icon name="logout" /><span className="logout-label">Sign out</span></button></div>
       </aside>
       <section className="time-workspace" id="dashboard">
-        <motion.header animate={{ opacity: 1, y: 0 }} className="time-header" initial={entrance} transition={{ duration: .42, ease: "easeOut" }}><div><p>{currentDate}</p><h1>Welcome back, {employeeName}.</h1></div><div className="status-chip"><span className={activeEntry && !activeBreak ? "online" : "offline"} />{activeBreak ? "On break" : activeEntry ? "Clocked in" : "Clocked out"}</div></motion.header>
+        <motion.header animate={{ opacity: 1, y: 0 }} className="time-header" initial={entrance} transition={{ duration: .42, ease: "easeOut" }}><div><p>{selectedCollab.name} · {currentDate}</p><h1>Welcome back, {employeeName}.</h1></div><div className="workspace-actions"><button onClick={() => void openMembers()} type="button">Members</button><button onClick={() => setInboxOpen(true)} type="button">Inbox</button><div className="status-chip"><span className={activeEntry && !activeBreak ? "online" : "offline"} />{activeBreak ? "On break" : activeEntry ? "Clocked in" : "Clocked out"}</div></div></motion.header>
         <AnimatePresence mode="wait">{notice && <motion.div animate={{ opacity: 1, height: "auto" }} className={`time-notice ${notice.type}`} exit={{ opacity: 0, height: 0 }} initial={{ opacity: 0, height: 0 }} role={notice.type === "error" ? "alert" : "status"}><span>{notice.type === "success" ? <Icon name="check" /> : "!"}</span>{notice.text}<button aria-label="Dismiss" onClick={() => setNotice(null)} type="button">×</button></motion.div>}</AnimatePresence>
         <motion.section animate={{ opacity: 1, y: 0 }} className="clock-card" initial={entrance} transition={{ duration: .45, delay: .08, ease: "easeOut" }}><div className="clock-card-copy"><p className="section-kicker">Today’s time</p><h2>{activeBreak ? "Your break is in progress" : activeEntry ? "Your shift is in progress" : "Ready when you are"}</h2><p>{activeEntry ? `Clocked in at ${new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(activeEntry.clockIn))}` : "Clock in when you begin work. Your current time is recorded automatically."}</p>{activeEntry && <strong>{toDuration((now - activeEntry.clockIn) - activeEntry.breaks.reduce((total, item) => total + ((item.endedAt ?? now) - item.startedAt), 0))} <small>paid this shift</small></strong>}</div><div className="clock-actions">{activeEntry && <motion.button whileTap={reduceMotion ? undefined : { scale: .98 }} className="clock-button break-button" disabled={busy} onClick={() => void updateBreak()} type="button">{busy ? "Updating…" : activeBreak ? "End break" : "Start break"}</motion.button>}<motion.button whileTap={reduceMotion ? undefined : { scale: .98 }} className={`clock-button ${activeEntry ? "clock-out" : "clock-in"}`} disabled={busy || Boolean(activeBreak)} onClick={() => void updateClock()} type="button"><Icon name="clock" />{busy ? "Updating…" : activeEntry ? "Clock out" : "Clock in"}</motion.button></div></motion.section>
         <motion.section animate={{ opacity: 1, y: 0 }} className="time-metrics" initial={entrance} transition={{ duration: .45, delay: .15, ease: "easeOut" }} aria-label="Hours summary">{[["clock", "Today", toDuration(metrics.today), activeEntry ? "Currently working" : "No active shift"], ["calendar", "This week", toDuration(metrics.week), "Monday to today"], ["briefcase", "This month", toDuration(metrics.month), "All recorded shifts"]].map(([icon, label, total, caption], index) => <motion.article animate={{ opacity: 1, y: 0 }} initial={entrance} key={label} transition={{ duration: .35, delay: .2 + index * .07, ease: "easeOut" }}><span><Icon name={icon as "clock" | "calendar" | "briefcase"} /></span><p>{label}</p><strong>{total}</strong><small>{caption}</small></motion.article>)}</motion.section>
         <motion.section animate={{ opacity: 1, y: 0 }} className="history-card" id="history" initial={entrance} transition={{ duration: .45, delay: .34, ease: "easeOut" }}><div className="history-heading"><div><p className="section-kicker">Attendance</p><h2>Time history</h2></div><button onClick={() => void loadEntries()} type="button">Refresh</button></div>{loading ? <div className="history-loading"><i /><i /><i /></div> : entries.length === 0 ? <div className="no-entries"><Icon name="calendar" /><h3>No time entries yet</h3><p>Your clock-ins and clock-outs will appear here.</p></div> : <div className="history-table" role="region" aria-label="Time history by day" tabIndex={0}>{historyDays.map((day) => <section className="history-day" key={day.key}><header><strong>{day.label}</strong><span>{toDuration(day.total)} paid</span></header><table><thead><tr><th>Clock in</th><th>Clock out</th><th>Paid time</th><th>Status</th></tr></thead><tbody>{day.entries.map((entry) => <tr key={entry.id}><td>{new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(entry.clockIn))}</td><td>{entry.clockOut ? new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(entry.clockOut)) : "—"}</td><td>{toDuration(paidDuration(entry, now))}</td><td><span className={entry.clockOut ? "entry-complete" : "entry-active"}>{entry.clockOut ? "Completed" : "In progress"}</span></td></tr>)}</tbody></table></section>)}</div>}</motion.section>
+        {membersOpen && <aside aria-label="Collab members" className="workspace-panel"><header><div><p className="section-kicker">People</p><h2>Members</h2></div><button aria-label="Close members" onClick={() => setMembersOpen(false)} type="button">×</button></header>{members.map((member) => <div className="workspace-person" key={member.id}><span>{member.email[0].toUpperCase()}</span><div><strong>{member.email}</strong><small>{member.role.replace("_", "-")}</small></div></div>)}</aside>}
+        {inboxOpen && <aside aria-label="Collab inbox" className="workspace-panel"><header><div><p className="section-kicker">Updates</p><h2>Inbox</h2></div><button aria-label="Close inbox" onClick={() => setInboxOpen(false)} type="button">×</button></header><div className="workspace-inbox-empty"><strong>You’re all caught up.</strong><p>Collab invitations, approvals, and timekeeping updates will appear here as they are added.</p></div></aside>}
       </section>
     </div>
   </main>;
