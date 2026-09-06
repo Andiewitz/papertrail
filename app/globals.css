@@ -328,6 +328,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .sidebar-toggle { background: #fff; box-shadow: 0 4px 10px rgba(69, 66, 60, .14); }
 .sidebar-toggle:hover, .sidebar-toggle:active { box-shadow: 0 2px 5px rgba(69, 66, 60, .16); }
 .employee-summary { margin-inline: 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.collab-switcher { display: grid; gap: 5px; margin: -20px 4px 28px; color: #817a75; font-size: .65rem; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }.collab-switcher select { width: 100%; border: 1px solid #d8d5cf; border-radius: 8px; padding: 8px; color: #4b4743; background: #fff; font: inherit; font-size: .78rem; letter-spacing: 0; text-transform: none; }
 .employee-summary > span { box-shadow: 0 5px 12px rgba(118, 91, 79, .2); }
 .time-nav:hover { background: rgba(255,255,255,.65); box-shadow: 0 3px 8px rgba(69, 66, 60, .08); }
 .time-nav.active { background: #fff; box-shadow: 0 5px 12px rgba(69, 66, 60, .11); }

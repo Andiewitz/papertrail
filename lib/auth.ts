@@ -50,9 +50,9 @@ export async function currentUser(): Promise<SessionUser | null> {
   if (!token) return null;
   const client = await db();
   const now = Date.now();
-  const result = await client.execute({ sql: "SELECT users.id, users.email, sessions.expires_at, memberships.status AS membership_status FROM sessions JOIN users ON users.id = sessions.user_id LEFT JOIN memberships ON memberships.organization_id = users.active_organization_id AND memberships.user_id = users.id WHERE sessions.id = ?", args: [hashToken(token)] });
+  const result = await client.execute({ sql: "SELECT users.id, users.email, sessions.expires_at FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.id = ?", args: [hashToken(token)] });
   const row = result.rows[0];
-  if (!row || Number(row.expires_at) <= now || (row.membership_status !== null && String(row.membership_status) !== "active")) {
+  if (!row || Number(row.expires_at) <= now) {
     if (row) await client.execute({ sql: "DELETE FROM sessions WHERE id = ?", args: [hashToken(token)] });
     return null;
   }

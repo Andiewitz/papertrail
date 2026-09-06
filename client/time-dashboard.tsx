@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import AuthForm from "@/client/auth-form";
 
 type User = { id: string; email: string };
+type Collab = { id: string; name: string; role: "admin" | "co_admin" | "member" };
 type Break = { id: number; startedAt: number; endedAt: number | null };
 type TimeEntry = { id: number; clockIn: number; clockOut: number | null; breaks: Break[] };
 type Notice = { type: "error" | "success"; text: string } | null;
@@ -46,6 +47,9 @@ function startOfWeek(date: Date) {
 export default function TimeDashboard() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [collabs, setCollabs] = useState<Collab[] | undefined>(undefined);
+  const [selectedCollab, setSelectedCollab] = useState<Collab | null>(null);
+  const [collabName, setCollabName] = useState("");
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -57,7 +61,8 @@ export default function TimeDashboard() {
   async function loadEntries() {
     setLoading(true);
     try {
-      const response = await fetch("/api/time", { cache: "no-store" });
+      if (!selectedCollab) return;
+      const response = await fetch(`/api/collabs/${selectedCollab.id}/time`, { cache: "no-store" });
       const data = await response.json();
       if (response.status === 401) { setUser(null); return; }
       if (!response.ok) throw new Error(data.error ?? "Attendance records could not be loaded.");
@@ -73,6 +78,16 @@ export default function TimeDashboard() {
   }, []);
 
   useEffect(() => { if (user) void loadEntries(); }, [user]);
+  useEffect(() => {
+    if (!user) return;
+    void fetch("/api/collabs", { cache: "no-store" }).then(async (response) => {
+      const data = await response.json(); if (!response.ok) throw new Error(data.error);
+      const next = data.collabs as Collab[]; setCollabs(next);
+      const saved = window.localStorage.getItem("papertrail-collab");
+      setSelectedCollab(next.find((collab) => collab.id === saved) ?? next[0] ?? null);
+    }).catch((error) => { setCollabs([]); setNotice({ type: "error", text: error instanceof Error ? error.message : "Your Collabs could not be loaded." }); });
+  }, [user]);
+  useEffect(() => { if (user && selectedCollab) void loadEntries(); }, [user, selectedCollab]);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30000); return () => window.clearInterval(timer); }, []);
   useEffect(() => { setSidebarCollapsed(window.localStorage.getItem("papertrail-sidebar") === "collapsed"); }, []);
 
@@ -107,7 +122,7 @@ export default function TimeDashboard() {
     setBusy(true);
     setNotice(null);
     try {
-      const response = await fetch("/api/time", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, ...(activeEntry ? { entryId: activeEntry.id } : {}) }) });
+      const response = await fetch(`/api/collabs/${selectedCollab?.id}/time`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, ...(activeEntry ? { entryId: activeEntry.id } : {}) }) });
       const data = await response.json();
       if (response.status === 401) { setUser(null); return; }
       if (!response.ok) {
@@ -128,7 +143,7 @@ export default function TimeDashboard() {
     if (!activeEntry) return;
     setBusy(true); setNotice(null);
     try {
-      const response = await fetch("/api/time", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: activeBreak ? "break-end" : "break-start" }) });
+      const response = await fetch(`/api/collabs/${selectedCollab?.id}/time`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: activeBreak ? "break-end" : "break-start" }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Your break could not be updated.");
       setEntries((current) => current.map((item) => item.id === data.entry.id ? data.entry : item));
@@ -151,8 +166,18 @@ export default function TimeDashboard() {
     });
   }
 
-  if (user === undefined) return <main className="time-loading"><span className="brand-mark"><i /><i /><i /></span><p>Loading your timecard…</p></main>;
+  async function createFirstCollab(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setNotice(null);
+    try {
+      const response = await fetch("/api/collabs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: collabName }) });
+      const data = await response.json(); if (!response.ok) throw new Error(data.error ?? "Your Collab could not be created.");
+      setCollabs([data.collab]); setSelectedCollab(data.collab); window.localStorage.setItem("papertrail-collab", data.collab.id);
+    } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Your Collab could not be created." }); } finally { setBusy(false); }
+  }
+
+  if (user === undefined || (user && collabs === undefined)) return <main className="time-loading"><span className="brand-mark"><i /><i /><i /></span><p>Loading your timecard…</p></main>;
   if (!user) return <AuthForm onAuthenticated={setUser} />;
+  if (!selectedCollab) return <main className="time-loading"><div className="auth-card"><p className="section-kicker">Get started</p><h2>Create your first Collab</h2><p className="auth-subtitle">A Collab is the private space where your team and time records live.</p><form className="auth-form" onSubmit={createFirstCollab}><fieldset disabled={busy}><label>Collab name<input autoFocus onChange={(event) => setCollabName(event.target.value)} placeholder="Acme Team" value={collabName} /></label>{notice && <p className="auth-error" role="alert">{notice.text}</p>}<button className="auth-submit" type="submit">{busy ? "Creating…" : "Create Collab"}</button></fieldset></form></div></main>;
 
   const employeeName = user.email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   const currentDate = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" }).format(new Date(now));
@@ -161,7 +186,7 @@ export default function TimeDashboard() {
     <div className={`time-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
       <aside className="time-sidebar">
         <div className="sidebar-brand-row"><div className="brand"><span className="brand-mark"><i /><i /><i /></span><span className="brand-label">Papertrail</span></div><button aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} className="sidebar-toggle" onClick={toggleSidebar} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} type="button"><Icon name="panel" /></button></div>
-        <div className="employee-summary"><span>{user.email[0].toUpperCase()}</span><div className="employee-copy"><strong>{employeeName}</strong><small>Employee portal</small></div></div>
+        <div className="employee-summary"><span>{user.email[0].toUpperCase()}</span><div className="employee-copy"><strong>{employeeName}</strong><small>{selectedCollab.role.replace("_", "-")}</small></div></div><label className="collab-switcher"><span>Collab</span><select aria-label="Selected Collab" onChange={(event) => { const next = collabs?.find((collab) => collab.id === event.target.value) ?? null; setSelectedCollab(next); if (next) window.localStorage.setItem("papertrail-collab", next.id); }} value={selectedCollab.id}>{collabs?.map((collab) => <option key={collab.id} value={collab.id}>{collab.name}</option>)}</select></label>
         <nav aria-label="Employee navigation"><Link className="time-nav active" href="/" title="Dashboard"><Icon name="briefcase" /><span className="nav-label">Dashboard</span></Link><Link className="time-nav" href="/history" title="Time history"><Icon name="calendar" /><span className="nav-label">Time history</span></Link></nav>
         <div className="time-sidebar-footer"><p><Icon name="clock" /><span className="sidebar-security">Time entries are recorded securely.</span></p><button onClick={() => void signOut()} title="Sign out" type="button"><Icon name="logout" /><span className="logout-label">Sign out</span></button></div>
       </aside>

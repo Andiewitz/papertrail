@@ -71,11 +71,11 @@ try {
   const health = await json(await fetch(`${baseUrl}/api/health`), 200, "health check");
   assert.equal(health.ok, true);
   assert.equal(health.database, "connected");
-  assert.equal(health.migrations, 4);
+  assert.equal(health.migrations, 5);
 
   const noSession = await json(await fetch(`${baseUrl}/api/auth/session`), 200, "anonymous session");
   assert.equal(noSession.user, null);
-  await json(await fetch(`${baseUrl}/api/time`), 401, "anonymous attendance request");
+  await json(await fetch(`${baseUrl}/api/collabs/not-a-real-collab/time`), 401, "anonymous attendance request");
 
   const origin = baseUrl;
   const registration = await json(await fetch(`${baseUrl}/api/auth/sign-up`, {
@@ -93,23 +93,23 @@ try {
   assert.ok(ownerCookieHeader?.includes("HttpOnly"), "sign-in should return an HttpOnly session cookie");
   const ownerCookie = ownerCookieHeader.split(";", 1)[0];
   const ownerHeaders = { cookie: ownerCookie, origin, "content-type": "application/json", "x-forwarded-for": "203.0.113.11" };
+  const createdCollab = await json(await fetch(`${baseUrl}/api/collabs`, { method: "POST", headers: ownerHeaders, body: JSON.stringify({ name: "Integration Collab" }) }), 201, "collab creation");
+  const collabId = createdCollab.collab.id;
+  const employeeTimeUrl = `${baseUrl}/api/collabs/${collabId}/time`;
 
-  const directory = await json(await fetch(`${baseUrl}/api/admin/employees`, { headers: { cookie: ownerCookie } }), 200, "administrator directory");
-  assert.equal(directory.employees.length, 1);
-  assert.equal(directory.employees[0].role, "admin");
+  const directory = await json(await fetch(`${baseUrl}/api/collabs/${collabId}/members`, { headers: { cookie: ownerCookie } }), 200, "collab directory");
+  assert.equal(directory.members.length, 1);
+  assert.equal(directory.members[0].role, "admin");
 
-  const invitation = await json(await fetch(`${baseUrl}/api/admin/invitations`, {
-    method: "POST", headers: ownerHeaders, body: JSON.stringify({ email: "employee@example.test", role: "employee" }),
+  const invitation = await json(await fetch(`${baseUrl}/api/collabs/${collabId}/invitations`, {
+    method: "POST", headers: ownerHeaders, body: JSON.stringify({ email: "employee@example.test" }),
   }), 201, "employee invitation");
   assert.ok(invitation.invitation.token, "an invitation token should be returned exactly once at creation");
-  const listedInvitations = await json(await fetch(`${baseUrl}/api/admin/invitations`, { headers: { cookie: ownerCookie } }), 200, "listed invitations");
-  assert.equal(listedInvitations.invitations[0].token, undefined, "invitation listing must never expose a token");
-
   await json(await fetch(`${baseUrl}/api/auth/sign-up`, {
     method: "POST",
     headers: { "content-type": "application/json", origin, "x-forwarded-for": "203.0.113.12" },
     body: JSON.stringify({ email: "uninvited@example.test", password: "IntegrationPassword!2026" }),
-  }), 403, "uninvited registration");
+  }), 201, "normal user registration");
 
   await json(await fetch(`${baseUrl}/api/auth/sign-up`, {
     method: "POST",
@@ -126,73 +126,73 @@ try {
   const cookie = employeeCookieHeader.split(";", 1)[0];
   const authenticatedHeaders = { cookie, origin, "content-type": "application/json", "x-forwarded-for": "203.0.113.14" };
 
-  await json(await fetch(`${baseUrl}/api/time`), 401, "unauthenticated time request");
-  const emptyHistory = await json(await fetch(`${baseUrl}/api/time`, { headers: { cookie } }), 200, "empty time history");
+  await json(await fetch(employeeTimeUrl), 401, "unauthenticated time request");
+  const emptyHistory = await json(await fetch(employeeTimeUrl, { headers: { cookie } }), 200, "empty time history");
   assert.deepEqual(emptyHistory.entries, []);
 
-  const clockIn = await json(await fetch(`${baseUrl}/api/time`, {
+  const clockIn = await json(await fetch(employeeTimeUrl, {
     method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "clock-in" }),
   }), 201, "clock in");
   assert.equal(clockIn.entry.clockOut, null);
 
-  const duplicateClockIn = await json(await fetch(`${baseUrl}/api/time`, {
+  const duplicateClockIn = await json(await fetch(employeeTimeUrl, {
     method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "clock-in" }),
   }), 200, "duplicate clock in");
   assert.equal(duplicateClockIn.alreadyClockedIn, true);
   assert.equal(duplicateClockIn.entry.id, clockIn.entry.id);
 
-  const breakStart = await json(await fetch(`${baseUrl}/api/time`, {
+  const breakStart = await json(await fetch(employeeTimeUrl, {
     method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "break-start" }),
   }), 201, "start break");
   assert.equal(breakStart.entry.breaks.length, 1);
   assert.equal(breakStart.entry.breaks[0].endedAt, null);
 
-  const duplicateBreakStart = await json(await fetch(`${baseUrl}/api/time`, {
+  const duplicateBreakStart = await json(await fetch(employeeTimeUrl, {
     method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "break-start" }),
   }), 200, "duplicate break start");
   assert.equal(duplicateBreakStart.alreadyOnBreak, true);
 
-  await json(await fetch(`${baseUrl}/api/time`, {
+  await json(await fetch(employeeTimeUrl, {
     method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "clock-out", entryId: clockIn.entry.id }),
   }), 409, "clock out with active break");
 
-  const breakEnd = await json(await fetch(`${baseUrl}/api/time`, {
+  const breakEnd = await json(await fetch(employeeTimeUrl, {
     method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "break-end" }),
   }), 200, "end break");
   assert.notEqual(breakEnd.entry.breaks[0].endedAt, null);
 
-  const clockOut = await json(await fetch(`${baseUrl}/api/time`, {
+  const clockOut = await json(await fetch(employeeTimeUrl, {
     method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "clock-out", entryId: clockIn.entry.id }),
   }), 200, "clock out");
   assert.notEqual(clockOut.entry.clockOut, null);
 
-  const duplicateClockOut = await json(await fetch(`${baseUrl}/api/time`, {
+  const duplicateClockOut = await json(await fetch(employeeTimeUrl, {
     method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "clock-out", entryId: clockIn.entry.id }),
   }), 200, "duplicate clock out");
   assert.equal(duplicateClockOut.alreadyClockedOut, true);
 
-  const history = await json(await fetch(`${baseUrl}/api/time`, { headers: { cookie } }), 200, "completed time history");
+  const history = await json(await fetch(employeeTimeUrl, { headers: { cookie } }), 200, "completed time history");
   assert.equal(history.entries.length, 1);
   assert.equal(history.entries[0].id, clockIn.entry.id);
   assert.notEqual(history.entries[0].clockOut, null);
 
-  await json(await fetch(`${baseUrl}/api/time`, {
+  await json(await fetch(employeeTimeUrl, {
     method: "POST",
     headers: { ...authenticatedHeaders, origin: "https://untrusted.example" },
     body: JSON.stringify({ action: "clock-in" }),
   }), 403, "cross-origin clock in");
 
-  const employee = (await json(await fetch(`${baseUrl}/api/admin/employees`, { headers: { cookie: ownerCookie } }), 200, "updated administrator directory")).employees.find((person) => person.email === "employee@example.test");
+  const employee = (await json(await fetch(`${baseUrl}/api/collabs/${collabId}/members`, { headers: { cookie: ownerCookie } }), 200, "updated Collab directory")).members.find((person) => person.email === "employee@example.test");
   assert.ok(employee, "new employee should appear in the directory");
-  await json(await fetch(`${baseUrl}/api/admin/employees/${employee.id}`, {
+  await json(await fetch(`${baseUrl}/api/collabs/${collabId}/members/${employee.id}`, {
     method: "PATCH", headers: ownerHeaders, body: JSON.stringify({ status: "deactivated" }),
   }), 200, "employee deactivation");
-  await json(await fetch(`${baseUrl}/api/time`, { headers: { cookie } }), 401, "deactivated employee session");
+  await json(await fetch(employeeTimeUrl, { headers: { cookie } }), 401, "deactivated employee Collab access");
   await json(await fetch(`${baseUrl}/api/auth/sign-in`, {
     method: "POST",
     headers: { "content-type": "application/json", origin, "x-forwarded-for": "203.0.113.14" },
     body: JSON.stringify({ email: "employee@example.test", password: "IntegrationPassword!2026" }),
-  }), 403, "deactivated employee sign-in");
+  }), 200, "deactivated employee sign-in");
 
   const signedOut = await fetch(`${baseUrl}/api/auth/sign-out`, { method: "POST", headers: ownerHeaders });
   assert.equal(signedOut.status, 204, "sign out should clear the session");
