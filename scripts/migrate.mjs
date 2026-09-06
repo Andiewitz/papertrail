@@ -35,6 +35,15 @@ try {
     console.log(`Applied ${file}`);
   }
 
+  if (files.includes("004_collab_tenancy.sql")) {
+    const unmappedEntries = await client.execute("SELECT COUNT(*) AS count FROM time_entries WHERE collab_id IS NULL");
+    if (Number(unmappedEntries.rows[0].count) > 0) {
+      throw new Error("Collab migration left time entries without a collab_id. Restore the pre-migration backup and investigate before deploying the application transition.");
+    }
+    const invalidCollabs = await client.execute("SELECT COUNT(*) AS count FROM collab_memberships WHERE role = 'admin' GROUP BY collab_id HAVING COUNT(*) <> 1");
+    if (invalidCollabs.rows.length > 0) throw new Error("Collab migration did not produce exactly one admin per collab.");
+  }
+
   if (process.argv.includes("--status")) {
     const result = await client.execute("SELECT id, applied_at FROM schema_migrations ORDER BY id");
     for (const row of result.rows) console.log(`${row.id}\t${new Date(Number(row.applied_at)).toISOString()}`);
