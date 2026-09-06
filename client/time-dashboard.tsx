@@ -26,6 +26,11 @@ function toDuration(milliseconds: number) {
   return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
 }
 
+function paidDuration(entry: TimeEntry, currentTime: number) {
+  const breaks = entry.breaks.reduce((total, item) => total + Math.max(0, (item.endedAt ?? currentTime) - item.startedAt), 0);
+  return Math.max(0, (entry.clockOut ?? currentTime) - entry.clockIn - breaks);
+}
+
 function sameDay(left: Date, right: Date) {
   return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
 }
@@ -77,12 +82,23 @@ export default function TimeDashboard() {
     const weekStart = startOfWeek(today).getTime();
     const month = today.getMonth();
     const year = today.getFullYear();
-    const duration = (entry: TimeEntry) => Math.max(0, (entry.clockOut ?? now) - entry.clockIn - entry.breaks.reduce((total, item) => total + Math.max(0, (item.endedAt ?? now) - item.startedAt), 0));
+    const duration = (entry: TimeEntry) => paidDuration(entry, now);
     return {
       today: entries.filter((entry) => sameDay(new Date(entry.clockIn), today)).reduce((total, entry) => total + duration(entry), 0),
       week: entries.filter((entry) => entry.clockIn >= weekStart).reduce((total, entry) => total + duration(entry), 0),
       month: entries.filter((entry) => { const date = new Date(entry.clockIn); return date.getMonth() === month && date.getFullYear() === year; }).reduce((total, entry) => total + duration(entry), 0),
     };
+  }, [entries, now]);
+  const historyDays = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" });
+    return entries.reduce<{ label: string; key: string; entries: TimeEntry[]; total: number }[]>((days, entry) => {
+      const date = new Date(entry.clockIn);
+      const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+      const current = days.at(-1);
+      if (current?.key === key) { current.entries.push(entry); current.total += paidDuration(entry, now); }
+      else days.push({ key, label: formatter.format(date), entries: [entry], total: paidDuration(entry, now) });
+      return days;
+    }, []);
   }, [entries, now]);
 
   async function updateClock() {
@@ -153,7 +169,7 @@ export default function TimeDashboard() {
         <AnimatePresence mode="wait">{notice && <motion.div animate={{ opacity: 1, height: "auto" }} className={`time-notice ${notice.type}`} exit={{ opacity: 0, height: 0 }} initial={{ opacity: 0, height: 0 }} role={notice.type === "error" ? "alert" : "status"}><span>{notice.type === "success" ? <Icon name="check" /> : "!"}</span>{notice.text}<button aria-label="Dismiss" onClick={() => setNotice(null)} type="button">×</button></motion.div>}</AnimatePresence>
         <motion.section animate={{ opacity: 1, y: 0 }} className="clock-card" initial={entrance} transition={{ duration: .45, delay: .08, ease: "easeOut" }}><div className="clock-card-copy"><p className="section-kicker">Today’s time</p><h2>{activeBreak ? "Your break is in progress" : activeEntry ? "Your shift is in progress" : "Ready when you are"}</h2><p>{activeEntry ? `Clocked in at ${new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(activeEntry.clockIn))}` : "Clock in when you begin work. Your current time is recorded automatically."}</p>{activeEntry && <strong>{toDuration((now - activeEntry.clockIn) - activeEntry.breaks.reduce((total, item) => total + ((item.endedAt ?? now) - item.startedAt), 0))} <small>paid this shift</small></strong>}</div><div className="clock-actions">{activeEntry && <motion.button whileTap={reduceMotion ? undefined : { scale: .98 }} className="clock-button break-button" disabled={busy} onClick={() => void updateBreak()} type="button">{busy ? "Updating…" : activeBreak ? "End break" : "Start break"}</motion.button>}<motion.button whileTap={reduceMotion ? undefined : { scale: .98 }} className={`clock-button ${activeEntry ? "clock-out" : "clock-in"}`} disabled={busy || Boolean(activeBreak)} onClick={() => void updateClock()} type="button"><Icon name="clock" />{busy ? "Updating…" : activeEntry ? "Clock out" : "Clock in"}</motion.button></div></motion.section>
         <motion.section animate={{ opacity: 1, y: 0 }} className="time-metrics" initial={entrance} transition={{ duration: .45, delay: .15, ease: "easeOut" }} aria-label="Hours summary">{[["clock", "Today", toDuration(metrics.today), activeEntry ? "Currently working" : "No active shift"], ["calendar", "This week", toDuration(metrics.week), "Monday to today"], ["briefcase", "This month", toDuration(metrics.month), "All recorded shifts"]].map(([icon, label, total, caption], index) => <motion.article animate={{ opacity: 1, y: 0 }} initial={entrance} key={label} transition={{ duration: .35, delay: .2 + index * .07, ease: "easeOut" }}><span><Icon name={icon as "clock" | "calendar" | "briefcase"} /></span><p>{label}</p><strong>{total}</strong><small>{caption}</small></motion.article>)}</motion.section>
-        <motion.section animate={{ opacity: 1, y: 0 }} className="history-card" id="history" initial={entrance} transition={{ duration: .45, delay: .34, ease: "easeOut" }}><div className="history-heading"><div><p className="section-kicker">Attendance</p><h2>Recent time entries</h2></div><button onClick={() => void loadEntries()} type="button">Refresh</button></div>{loading ? <div className="history-loading"><i /><i /><i /></div> : entries.length === 0 ? <div className="no-entries"><Icon name="calendar" /><h3>No time entries yet</h3><p>Your clock-ins and clock-outs will appear here.</p></div> : <div className="history-table" role="region" aria-label="Recent time entries" tabIndex={0}><table><thead><tr><th>Date</th><th>Clock in</th><th>Clock out</th><th>Total</th><th>Status</th></tr></thead><tbody>{entries.map((entry) => <tr key={entry.id}><td>{new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric" }).format(new Date(entry.clockIn))}</td><td>{new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(entry.clockIn))}</td><td>{entry.clockOut ? new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(entry.clockOut)) : "—"}</td><td>{toDuration((entry.clockOut ?? now) - entry.clockIn)}</td><td><span className={entry.clockOut ? "entry-complete" : "entry-active"}>{entry.clockOut ? "Completed" : "In progress"}</span></td></tr>)}</tbody></table></div>}</motion.section>
+        <motion.section animate={{ opacity: 1, y: 0 }} className="history-card" id="history" initial={entrance} transition={{ duration: .45, delay: .34, ease: "easeOut" }}><div className="history-heading"><div><p className="section-kicker">Attendance</p><h2>Time history</h2></div><button onClick={() => void loadEntries()} type="button">Refresh</button></div>{loading ? <div className="history-loading"><i /><i /><i /></div> : entries.length === 0 ? <div className="no-entries"><Icon name="calendar" /><h3>No time entries yet</h3><p>Your clock-ins and clock-outs will appear here.</p></div> : <div className="history-table" role="region" aria-label="Time history by day" tabIndex={0}>{historyDays.map((day) => <section className="history-day" key={day.key}><header><strong>{day.label}</strong><span>{toDuration(day.total)} paid</span></header><table><thead><tr><th>Clock in</th><th>Clock out</th><th>Paid time</th><th>Status</th></tr></thead><tbody>{day.entries.map((entry) => <tr key={entry.id}><td>{new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(entry.clockIn))}</td><td>{entry.clockOut ? new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(entry.clockOut)) : "—"}</td><td>{toDuration(paidDuration(entry, now))}</td><td><span className={entry.clockOut ? "entry-complete" : "entry-active"}>{entry.clockOut ? "Completed" : "In progress"}</span></td></tr>)}</tbody></table></section>)}</div>}</motion.section>
       </section>
     </div>
   </main>;
