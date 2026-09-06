@@ -1,0 +1,16 @@
+[Unit]
+Description=Papertrail encrypted Turso backup
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/papertrail-backup.env
+ExecStart=/opt/papertrail/ops/backups/papertrail-backup.sh
+User=papertrail-backup
+Group=papertrail-backup
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/papertrail-backups
