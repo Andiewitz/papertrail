@@ -30,8 +30,19 @@ Open http://localhost:3000. `npm run db:migrate` applies every versioned databas
 - Sessions use random opaque tokens. Only their SHA-256 hashes are stored in Turso; the token is held in an `HttpOnly`, `Secure` (in production), `SameSite=Lax` cookie.
 - Authentication endpoints are protected by a same-origin check and shared database rate limits (5 sign-ups/hour and 10 sign-ins/15 minutes per hashed client address). `Retry-After` is returned when limited.
 - Time entries are scoped to the signed-in employee. A database-level partial unique index prevents more than one open shift per employee.
+- The first account creates a workspace and becomes its administrator. Later accounts need an administrator-created, single-use, seven-day invitation token. The token is only returned on invitation creation; it is never returned by the invitation list.
+- Administrators can use the protected API to list employees, create invitations, and deactivate an employee. Deactivation revokes that employee's existing sessions immediately.
 
-Before a public launch, add email verification, password-reset flows, monitoring, and an account-recovery policy appropriate to your product.
+## Workforce administration API
+
+These endpoints require an authenticated administrator unless noted otherwise:
+
+- `GET /api/admin/employees` — employee directory (administrators and managers).
+- `PATCH /api/admin/employees/:userId` — change an employee role or deactivate them (administrators; cannot remove the final active administrator).
+- `GET /api/admin/invitations` — invitation metadata only (administrators and managers).
+- `POST /api/admin/invitations` with `{ "email": "employee@company.com", "role": "employee" }` — creates an invitation and returns its one-time token. Deliver that token through a trusted channel until email delivery is added.
+
+Before a public launch, add verified email delivery, password-reset flows, monitoring, and an account-recovery policy appropriate to your product.
 
 ## Deploy to Vercel
 

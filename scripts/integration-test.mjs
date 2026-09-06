@@ -71,7 +71,7 @@ try {
   const health = await json(await fetch(`${baseUrl}/api/health`), 200, "health check");
   assert.equal(health.ok, true);
   assert.equal(health.database, "connected");
-  assert.equal(health.migrations, 1);
+  assert.equal(health.migrations, 2);
 
   const noSession = await json(await fetch(`${baseUrl}/api/auth/session`), 200, "anonymous session");
   assert.equal(noSession.user, null);
@@ -81,18 +81,50 @@ try {
   const registration = await json(await fetch(`${baseUrl}/api/auth/sign-up`, {
     method: "POST",
     headers: { "content-type": "application/json", origin, "x-forwarded-for": "203.0.113.10" },
-    body: JSON.stringify({ email: "employee@example.test", password: "IntegrationPassword!2026" }),
+    body: JSON.stringify({ email: "owner@example.test", password: "IntegrationPassword!2026" }),
   }), 201, "registration");
-  assert.equal(registration.user.email, "employee@example.test");
+  assert.equal(registration.user.email, "owner@example.test");
 
-  const registrationCookie = (await fetch(`${baseUrl}/api/auth/sign-in`, {
+  const ownerCookieHeader = (await fetch(`${baseUrl}/api/auth/sign-in`, {
     method: "POST",
     headers: { "content-type": "application/json", origin, "x-forwarded-for": "203.0.113.11" },
+    body: JSON.stringify({ email: "owner@example.test", password: "IntegrationPassword!2026" }),
+  })).headers.get("set-cookie");
+  assert.ok(ownerCookieHeader?.includes("HttpOnly"), "sign-in should return an HttpOnly session cookie");
+  const ownerCookie = ownerCookieHeader.split(";", 1)[0];
+  const ownerHeaders = { cookie: ownerCookie, origin, "content-type": "application/json", "x-forwarded-for": "203.0.113.11" };
+
+  const directory = await json(await fetch(`${baseUrl}/api/admin/employees`, { headers: { cookie: ownerCookie } }), 200, "administrator directory");
+  assert.equal(directory.employees.length, 1);
+  assert.equal(directory.employees[0].role, "admin");
+
+  const invitation = await json(await fetch(`${baseUrl}/api/admin/invitations`, {
+    method: "POST", headers: ownerHeaders, body: JSON.stringify({ email: "employee@example.test", role: "employee" }),
+  }), 201, "employee invitation");
+  assert.ok(invitation.invitation.token, "an invitation token should be returned exactly once at creation");
+  const listedInvitations = await json(await fetch(`${baseUrl}/api/admin/invitations`, { headers: { cookie: ownerCookie } }), 200, "listed invitations");
+  assert.equal(listedInvitations.invitations[0].token, undefined, "invitation listing must never expose a token");
+
+  await json(await fetch(`${baseUrl}/api/auth/sign-up`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin, "x-forwarded-for": "203.0.113.12" },
+    body: JSON.stringify({ email: "uninvited@example.test", password: "IntegrationPassword!2026" }),
+  }), 403, "uninvited registration");
+
+  await json(await fetch(`${baseUrl}/api/auth/sign-up`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin, "x-forwarded-for": "203.0.113.13" },
+    body: JSON.stringify({ email: "employee@example.test", password: "IntegrationPassword!2026", invitationToken: invitation.invitation.token }),
+  }), 201, "invited registration");
+
+  const employeeCookieHeader = (await fetch(`${baseUrl}/api/auth/sign-in`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin, "x-forwarded-for": "203.0.113.14" },
     body: JSON.stringify({ email: "employee@example.test", password: "IntegrationPassword!2026" }),
   })).headers.get("set-cookie");
-  assert.ok(registrationCookie?.includes("HttpOnly"), "sign-in should return an HttpOnly session cookie");
-  const cookie = registrationCookie.split(";", 1)[0];
-  const authenticatedHeaders = { cookie, origin, "content-type": "application/json", "x-forwarded-for": "203.0.113.11" };
+  assert.ok(employeeCookieHeader?.includes("HttpOnly"), "employee sign-in should return a session cookie");
+  const cookie = employeeCookieHeader.split(";", 1)[0];
+  const authenticatedHeaders = { cookie, origin, "content-type": "application/json", "x-forwarded-for": "203.0.113.14" };
 
   await json(await fetch(`${baseUrl}/api/time`), 401, "unauthenticated time request");
   const emptyHistory = await json(await fetch(`${baseUrl}/api/time`, { headers: { cookie } }), 200, "empty time history");
@@ -130,12 +162,24 @@ try {
     body: JSON.stringify({ action: "clock-in" }),
   }), 403, "cross-origin clock in");
 
-  const signedOut = await fetch(`${baseUrl}/api/auth/sign-out`, { method: "POST", headers: authenticatedHeaders });
+  const employee = (await json(await fetch(`${baseUrl}/api/admin/employees`, { headers: { cookie: ownerCookie } }), 200, "updated administrator directory")).employees.find((person) => person.email === "employee@example.test");
+  assert.ok(employee, "new employee should appear in the directory");
+  await json(await fetch(`${baseUrl}/api/admin/employees/${employee.id}`, {
+    method: "PATCH", headers: ownerHeaders, body: JSON.stringify({ status: "deactivated" }),
+  }), 200, "employee deactivation");
+  await json(await fetch(`${baseUrl}/api/time`, { headers: { cookie } }), 401, "deactivated employee session");
+  await json(await fetch(`${baseUrl}/api/auth/sign-in`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin, "x-forwarded-for": "203.0.113.14" },
+    body: JSON.stringify({ email: "employee@example.test", password: "IntegrationPassword!2026" }),
+  }), 403, "deactivated employee sign-in");
+
+  const signedOut = await fetch(`${baseUrl}/api/auth/sign-out`, { method: "POST", headers: ownerHeaders });
   assert.equal(signedOut.status, 204, "sign out should clear the session");
-  const afterSignOut = await json(await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie } }), 200, "signed-out session");
+  const afterSignOut = await json(await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: ownerCookie } }), 200, "signed-out session");
   assert.equal(afterSignOut.user, null);
 
-  console.log("Integration flow passed: auth, session, clock-in/out idempotency, history, origin protection, and sign-out.");
+  console.log("Integration flow passed: organization bootstrap, invitations, roles, deactivation, auth, session, clock-in/out idempotency, history, origin protection, and sign-out.");
 } finally {
   server.kill("SIGTERM");
   await Promise.race([once(server, "exit"), new Promise((resolve) => setTimeout(resolve, 5_000))]);

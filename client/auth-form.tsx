@@ -3,7 +3,7 @@
 import { FormEvent, useRef, useState } from "react";
 
 type User = { id: string; email: string };
-type FieldErrors = Partial<Record<"email" | "password" | "confirmPassword" | "form", string>>;
+type FieldErrors = Partial<Record<"email" | "password" | "confirmPassword" | "invitationToken" | "form", string>>;
 type AuthErrorResponse = { error?: string; code?: string; debug?: string };
 
 function formatAuthError(response: Response, data: AuthErrorResponse) {
@@ -33,6 +33,7 @@ export default function AuthForm({ onAuthenticated }: { onAuthenticated: (user: 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [invitationToken, setInvitationToken] = useState("");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -41,6 +42,7 @@ export default function AuthForm({ onAuthenticated }: { onAuthenticated: (user: 
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const confirmationRef = useRef<HTMLInputElement>(null);
+  const invitationRef = useRef<HTMLInputElement>(null);
   const signingUp = mode === "sign-up";
 
   function validate() {
@@ -55,6 +57,7 @@ export default function AuthForm({ onAuthenticated }: { onAuthenticated: (user: 
     if (next.email) emailRef.current?.focus();
     else if (next.password) passwordRef.current?.focus();
     else if (next.confirmPassword) confirmationRef.current?.focus();
+    else if (next.invitationToken) invitationRef.current?.focus();
     return Object.keys(next).length === 0;
   }
 
@@ -63,7 +66,7 @@ export default function AuthForm({ onAuthenticated }: { onAuthenticated: (user: 
     if (!validate()) return;
     setSubmitting(true);
     try {
-      const response = await fetch(`/api/auth/${mode}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: email.trim(), password }) });
+      const response = await fetch(`/api/auth/${mode}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: email.trim(), password, ...(signingUp && invitationToken.trim() ? { invitationToken: invitationToken.trim() } : {}) }) });
       const data: AuthErrorResponse & { user?: User } = await response.json().catch(() => ({}));
       if (!response.ok) {
         if (response.status === 401) throw new Error(formatAuthError(response, data));
@@ -86,6 +89,7 @@ export default function AuthForm({ onAuthenticated }: { onAuthenticated: (user: 
     setErrors({});
     setPassword("");
     setConfirmPassword("");
+    setInvitationToken("");
     setShowPassword(false);
     setShowConfirmation(false);
     setCapsLock(false);
@@ -95,25 +99,26 @@ export default function AuthForm({ onAuthenticated }: { onAuthenticated: (user: 
   return <main className="auth-page">
     <section className="auth-showcase" aria-hidden="true">
       <div className="brand"><span className="brand-mark"><i /><i /><i /></span>Papertrail</div>
-      <div className="showcase-copy"><p className="section-kicker">A calmer workspace</p><h1>Ideas deserve a beautiful home.</h1><p>Capture small thoughts, keep them private, and return to what matters.</p></div>
-      <div className="showcase-note"><span className="note-dot" /> “The secret of getting ahead is getting started.”<small>— Mark Twain</small></div>
+      <div className="showcase-copy"><p className="section-kicker">Employee timekeeping</p><h1>Time that keeps work moving.</h1><p>Clock in, stay focused, and leave a clean record for every shift.</p></div>
+      <div className="showcase-note"><span className="note-dot" /> Private by default. Accurate by design.<small>— Papertrail</small></div>
     </section>
     <section className="auth-panel"><div className="auth-card">
       <div className="mobile-brand"><span className="brand-mark"><i /><i /><i /></span>Papertrail</div>
-      <p className="section-kicker">{signingUp ? "Start your workspace" : "Welcome back"}</p>
-      <h2>{signingUp ? "Create your account" : "Sign in to Papertrail"}</h2>
-      <p className="auth-subtitle">{signingUp ? "A simple, private place for your notes." : "Enter your details to continue."}</p>
+      <p className="section-kicker">{signingUp ? "Join your workplace" : "Welcome back"}</p>
+      <h2>{signingUp ? "Create your employee account" : "Sign in to Papertrail"}</h2>
+      <p className="auth-subtitle">{signingUp ? "Use the invitation token from your administrator if your workplace has already been set up." : "Enter your details to continue."}</p>
       <form className="auth-form" noValidate onSubmit={submit}>
         <fieldset disabled={submitting}>
           <label>Email address<input aria-describedby={errors.email ? "email-error" : undefined} aria-invalid={Boolean(errors.email)} autoCapitalize="none" autoComplete="email" autoFocus inputMode="email" onChange={(event) => { setEmail(event.target.value); setErrors((current) => ({ ...current, email: undefined, form: undefined })); }} placeholder="you@example.com" ref={emailRef} spellCheck={false} type="email" value={email} />{errors.email && <span id="email-error" className="field-error">{errors.email}</span>}</label>
           <label>Password<div className="password-input"><input aria-describedby={errors.password ? "password-error" : undefined} aria-invalid={Boolean(errors.password)} autoComplete={signingUp ? "new-password" : "current-password"} minLength={signingUp ? 12 : undefined} onKeyDown={(event) => setCapsLock(event.getModifierState("CapsLock"))} onKeyUp={(event) => setCapsLock(event.getModifierState("CapsLock"))} onChange={(event) => { setPassword(event.target.value); setErrors((current) => ({ ...current, password: undefined, form: undefined })); }} placeholder={signingUp ? "At least 12 characters" : "Your password"} ref={passwordRef} type={showPassword ? "text" : "password"} value={password} /><button aria-label={showPassword ? "Hide password" : "Show password"} className="password-toggle" onClick={() => setShowPassword((shown) => !shown)} type="button"><EyeIcon open={showPassword} /></button></div>{capsLock && <span className="caps-warning">Caps Lock is on</span>}{errors.password && <span id="password-error" className="field-error">{errors.password}</span>}</label>
           {signingUp && <label>Confirm password<div className="password-input"><input aria-describedby={errors.confirmPassword ? "confirmation-error" : undefined} aria-invalid={Boolean(errors.confirmPassword)} autoComplete="new-password" minLength={12} onChange={(event) => { setConfirmPassword(event.target.value); setErrors((current) => ({ ...current, confirmPassword: undefined, form: undefined })); }} placeholder="Re-enter your password" ref={confirmationRef} type={showConfirmation ? "text" : "password"} value={confirmPassword} /><button aria-label={showConfirmation ? "Hide confirmation password" : "Show confirmation password"} className="password-toggle" onClick={() => setShowConfirmation((shown) => !shown)} type="button"><EyeIcon open={showConfirmation} /></button></div>{errors.confirmPassword && <span id="confirmation-error" className="field-error">{errors.confirmPassword}</span>}</label>}
+          {signingUp && <label>Invitation token <span className="auth-optional">Optional for the first workspace only</span><input aria-describedby={errors.invitationToken ? "invitation-error" : undefined} aria-invalid={Boolean(errors.invitationToken)} autoCapitalize="none" autoComplete="off" onChange={(event) => { setInvitationToken(event.target.value); setErrors((current) => ({ ...current, invitationToken: undefined, form: undefined })); }} placeholder="Paste your invitation token" ref={invitationRef} spellCheck={false} type="text" value={invitationToken} />{errors.invitationToken && <span id="invitation-error" className="field-error">{errors.invitationToken}</span>}</label>}
           {signingUp && <div className="password-rules" aria-live="polite"><span className={password.length >= 12 ? "met" : ""}>✓ 12 or more characters</span><span className={confirmPassword.length > 0 && password === confirmPassword ? "met" : ""}>✓ Passwords match</span></div>}
           {errors.form && <p className="auth-error" role="alert">{errors.form}</p>}
           <button className="auth-submit" type="submit">{submitting ? <><i className="auth-spinner" />{signingUp ? "Creating account…" : "Signing in…"}</> : signingUp ? "Create account" : "Sign in"}</button>
         </fieldset>
       </form>
-      <p className="auth-switch">{signingUp ? "Already have an account?" : "New to Papertrail?"} <button disabled={submitting} onClick={switchMode} type="button">{signingUp ? "Sign in" : "Create an account"}</button></p>
+      <p className="auth-switch">{signingUp ? "Already have an account?" : "Need to join your workplace?"} <button disabled={submitting} onClick={switchMode} type="button">{signingUp ? "Sign in" : "Create an account"}</button></p>
     </div></section>
   </main>;
 }

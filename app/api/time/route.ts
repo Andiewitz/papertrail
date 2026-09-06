@@ -4,6 +4,7 @@ import type { Row } from "@libsql/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { logError } from "@/lib/log";
+import { activeMembership, MembershipError } from "@/lib/organization";
 
 export const runtime = "nodejs";
 
@@ -15,11 +16,13 @@ export async function GET() {
   try {
     const user = await currentUser();
     if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    await activeMembership(user.id);
     const result = await (await db()).execute({ sql: "SELECT id, clock_in, clock_out FROM time_entries WHERE user_id = ? ORDER BY clock_in DESC LIMIT 90", args: [user.id] });
     const entries = result.rows.map(entry);
     return NextResponse.json({ entries, activeEntry: entries.find((item) => item.clockOut === null) ?? null });
   } catch (error) {
     logError("time_entries_load_failed", error);
+    if (error instanceof MembershipError) return NextResponse.json({ error: error.message, code: error.code }, { status: 403 });
     return NextResponse.json({ error: "Your attendance records could not be loaded." }, { status: 500 });
   }
 }
@@ -29,6 +32,7 @@ export async function POST(request: Request) {
     if (!assertSameOrigin(request)) return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
     const user = await currentUser();
     if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    await activeMembership(user.id);
     const input = z.object({ action: z.enum(["clock-in", "clock-out"]), entryId: z.number().int().positive().optional() }).strict().safeParse(await request.json());
     if (!input.success) return NextResponse.json({ error: "Choose either clock-in or clock-out." }, { status: 400 });
     const client = await db();
@@ -64,6 +68,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "You are not currently clocked in." }, { status: 409 });
   } catch (error) {
     logError("time_entry_update_failed", error);
+    if (error instanceof MembershipError) return NextResponse.json({ error: error.message, code: error.code }, { status: 403 });
     return NextResponse.json({ error: "Your time entry could not be updated. Please try again." }, { status: 500 });
   }
 }
