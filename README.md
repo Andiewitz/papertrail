@@ -56,11 +56,4 @@ The included `vercel.json` uses Vercel's Next.js build pipeline. Import this rep
 
 Set `APP_URL` only for the Production environment after attaching your stable custom domain (for example, `https://notes.example.com`). Preview deployments intentionally derive their origin from Vercel so their authentication flow keeps working.
 
-Before the first production deployment, run the migrations once from a machine that has your production Turso credentials:
-
-```sh
-$env:NODE_ENV = "production"
-npm run db:migrate
-```
-
-Deploy from the Vercel dashboard or run `npx vercel` after signing in. `GET /api/health` verifies runtime configuration, database connectivity, and migration availability (it returns no credentials). Never put these values in `NEXT_PUBLIC_*` variables or commit `.env.local`.
+Vercel automatically runs `npm run db:migrate` before every build. That applies missing versioned migrations to the Turso database configured for that Vercel environment before the app is deployed. `GET /api/health` verifies runtime configuration, database connectivity, and migration availability (it returns no credentials). Never put these values in `NEXT_PUBLIC_*` variables or commit `.env.local`.
