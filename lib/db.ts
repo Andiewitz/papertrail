@@ -7,7 +7,7 @@ function getClient() {
   const authToken = process.env.TURSO_AUTH_TOKEN;
   if (!url || !authToken) {
     if (process.env.NODE_ENV !== "production") {
-      return createClient({ url: "file:local.db" });
+      return createClient({ url: process.env.LOCAL_DATABASE_URL ?? "file:local.db" });
     }
     throw new Error("TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must be set.");
   }

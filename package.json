@@ -7,7 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:integration": "node scripts/integration-test.mjs",
+    "verify": "npm run lint && npm run typecheck && npm run build && npm run test:integration"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   },
   "dependencies": {
     "@libsql/client": "^0.15.15",
