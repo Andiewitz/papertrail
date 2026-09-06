@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import Link from "next/link";
 import AuthForm from "@/client/auth-form";
 
 type User = { id: string; email: string };
@@ -161,7 +162,7 @@ export default function TimeDashboard() {
       <aside className="time-sidebar">
         <div className="sidebar-brand-row"><div className="brand"><span className="brand-mark"><i /><i /><i /></span><span className="brand-label">Papertrail</span></div><button aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} className="sidebar-toggle" onClick={toggleSidebar} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} type="button"><Icon name="panel" /></button></div>
         <div className="employee-summary"><span>{user.email[0].toUpperCase()}</span><div className="employee-copy"><strong>{employeeName}</strong><small>Employee portal</small></div></div>
-        <nav aria-label="Employee navigation"><a className="time-nav active" href="#dashboard" title="Dashboard"><Icon name="briefcase" /><span className="nav-label">Dashboard</span></a><a className="time-nav" href="#history" title="Time history"><Icon name="calendar" /><span className="nav-label">Time history</span></a></nav>
+        <nav aria-label="Employee navigation"><Link className="time-nav active" href="/" title="Dashboard"><Icon name="briefcase" /><span className="nav-label">Dashboard</span></Link><Link className="time-nav" href="/history" title="Time history"><Icon name="calendar" /><span className="nav-label">Time history</span></Link></nav>
         <div className="time-sidebar-footer"><p><Icon name="clock" /><span className="sidebar-security">Time entries are recorded securely.</span></p><button onClick={() => void signOut()} title="Sign out" type="button"><Icon name="logout" /><span className="logout-label">Sign out</span></button></div>
       </aside>
       <section className="time-workspace" id="dashboard">
