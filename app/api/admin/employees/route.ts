@@ -11,7 +11,7 @@ export async function GET() {
     const user = await currentUser();
     if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     const membership = await requireRole(user.id, ["admin", "manager"]);
-    const result = await db().execute({
+    const result = await (await db()).execute({
       sql: "SELECT users.id, users.email, memberships.role, memberships.status, memberships.created_at FROM memberships JOIN users ON users.id = memberships.user_id WHERE memberships.organization_id = ? ORDER BY CASE memberships.role WHEN 'admin' THEN 0 WHEN 'manager' THEN 1 ELSE 2 END, users.email",
       args: [membership.organizationId],
     });

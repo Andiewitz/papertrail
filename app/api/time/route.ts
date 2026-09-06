@@ -36,7 +36,7 @@ export async function GET() {
     const user = await currentUser();
     if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     await activeMembership(user.id);
-    const entries = await allEntries(db(), user.id);
+    const entries = await allEntries(await db(), user.id);
     return NextResponse.json({ entries, activeEntry: entries.find((item) => item.clockOut === null) ?? null });
   } catch (error) {
     logError("time_entries_load_failed", error);
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     await activeMembership(user.id);
     const input = schema.safeParse(await request.json());
     if (!input.success) return NextResponse.json({ error: "Choose a valid timekeeping action." }, { status: 400 });
-    const client = db(); const now = Date.now();
+    const client = await db(); const now = Date.now();
     if (input.data.action === "clock-in") {
       const active = await client.execute({ sql: "SELECT id FROM time_entries WHERE user_id = ? AND clock_out IS NULL", args: [user.id] });
       if (active.rows[0]) return NextResponse.json({ entry: await withBreaks(client, Number(active.rows[0].id)), alreadyClockedIn: true });

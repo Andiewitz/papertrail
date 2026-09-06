@@ -1,4 +1,3 @@
-import { createClient } from "@libsql/client";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,9 +10,13 @@ const authToken = process.env.TURSO_AUTH_TOKEN;
 
 if (production && (!databaseUrl || !authToken)) throw new Error("TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are required for production migrations.");
 
-const client = createClient(databaseUrl && authToken
+const config = databaseUrl && authToken
   ? { url: databaseUrl, authToken }
-  : { url: process.env.LOCAL_DATABASE_URL ?? "file:local.db" });
+  : { url: process.env.LOCAL_DATABASE_URL ?? "file:local.db" };
+const { createClient } = config.url.startsWith("file:")
+  ? await import("@libsql/client")
+  : await import("@libsql/client/web");
+const client = createClient(config);
 
 try {
   await client.execute("CREATE TABLE IF NOT EXISTS schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)");

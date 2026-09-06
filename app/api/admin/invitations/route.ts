@@ -17,7 +17,7 @@ export async function GET() {
     const user = await currentUser();
     if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     const membership = await requireRole(user.id, ["admin", "manager"]);
-    const result = await db().execute({ sql: "SELECT id, email, role, expires_at, accepted_at, created_at FROM invitations WHERE organization_id = ? ORDER BY created_at DESC LIMIT 100", args: [membership.organizationId] });
+    const result = await (await db()).execute({ sql: "SELECT id, email, role, expires_at, accepted_at, created_at FROM invitations WHERE organization_id = ? ORDER BY created_at DESC LIMIT 100", args: [membership.organizationId] });
     return NextResponse.json({ invitations: result.rows.map((row) => ({ id: String(row.id), email: String(row.email), role: String(row.role), expiresAt: Number(row.expires_at), acceptedAt: row.accepted_at === null ? null : Number(row.accepted_at), createdAt: Number(row.created_at) })) });
   } catch (error) {
     logError("invitations_list_failed", error);
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     const membership = await requireRole(user.id, ["admin"]);
     const input = invitationSchema.safeParse(await request.json());
     if (!input.success) return NextResponse.json({ error: input.error.issues[0]?.message ?? "Invalid invitation." }, { status: 400 });
-    const client = db();
+    const client = await db();
     const existingEmployee = await client.execute({ sql: "SELECT 1 FROM users JOIN memberships ON memberships.user_id = users.id WHERE memberships.organization_id = ? AND users.email = ? LIMIT 1", args: [membership.organizationId, input.data.email] });
     if (existingEmployee.rows[0]) return NextResponse.json({ error: "This person is already in your organization." }, { status: 409 });
     const token = createInvitationToken();

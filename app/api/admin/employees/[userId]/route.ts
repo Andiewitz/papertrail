@@ -23,7 +23,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ us
     const { userId } = await params;
     if (userId === actor.id) return NextResponse.json({ error: "You cannot change your own administrator access from this endpoint." }, { status: 400 });
 
-    const client = db();
+    const client = await db();
     const target = await client.execute({ sql: "SELECT role, status FROM memberships WHERE organization_id = ? AND user_id = ? LIMIT 1", args: [membership.organizationId, userId] });
     const targetRow = target.rows[0];
     if (!targetRow) return NextResponse.json({ error: "Employee not found in this organization." }, { status: 404 });

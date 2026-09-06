@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     validateRuntimeConfig();
-    const client = db();
+    const client = await db();
     await client.execute("SELECT 1");
     const migrations = await client.execute("SELECT COUNT(*) AS count FROM schema_migrations");
     return NextResponse.json({ ok: true, database: "connected", migrations: Number(migrations.rows[0].count) });

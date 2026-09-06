@@ -29,7 +29,7 @@ export function createInvitationToken() {
 export async function createWorkspaceForUser(user: { id: string; email: string; passwordHash: string }) {
   const organizationId = randomUUID();
   const now = Date.now();
-  const client = db();
+  const client = await db();
   await client.batch([
     { sql: "INSERT INTO organizations (id, name, created_at) VALUES (?, ?, ?)", args: [organizationId, workspaceName(user.email), now] },
     { sql: "INSERT INTO users (id, email, password_hash, created_at, active_organization_id) VALUES (?, ?, ?, ?, ?)", args: [user.id, user.email, user.passwordHash, now, organizationId] },
@@ -39,7 +39,7 @@ export async function createWorkspaceForUser(user: { id: string; email: string; 
 }
 
 export async function acceptInvitationForUser(user: { id: string; email: string; passwordHash: string }, token: string) {
-  const client = db();
+  const client = await db();
   const invitation = await client.execute({
     sql: "SELECT id, organization_id, role FROM invitations WHERE token_hash = ? AND email = ? AND accepted_at IS NULL AND expires_at > ? LIMIT 1",
     args: [hashInvitationToken(token), user.email, Date.now()],
@@ -55,7 +55,7 @@ export async function acceptInvitationForUser(user: { id: string; email: string;
 }
 
 export async function activeMembership(userId: string): Promise<Membership> {
-  const client = db();
+  const client = await db();
   const current = await client.execute({
     sql: "SELECT organizations.id AS organization_id, organizations.name AS organization_name, organizations.time_zone, organizations.week_starts_on, memberships.role, memberships.status FROM users JOIN organizations ON organizations.id = users.active_organization_id JOIN memberships ON memberships.organization_id = organizations.id AND memberships.user_id = users.id WHERE users.id = ? LIMIT 1",
     args: [userId],
