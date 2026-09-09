@@ -71,7 +71,7 @@ try {
   const health = await json(await fetch(`${baseUrl}/api/health`), 200, "health check");
   assert.equal(health.ok, true);
   assert.equal(health.database, "connected");
-  assert.equal(health.migrations, 6);
+  assert.equal(health.migrations, 7);
 
   const noSession = await json(await fetch(`${baseUrl}/api/auth/session`), 200, "anonymous session");
   assert.equal(noSession.user, null);
@@ -84,6 +84,7 @@ try {
     body: JSON.stringify({ email: "owner@example.test", password: "IntegrationPassword!2026" }),
   }), 201, "registration");
   assert.equal(registration.user.email, "owner@example.test");
+  assert.match(registration.user.id, /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i, "users use UUIDs");
 
   const ownerCookieHeader = (await fetch(`${baseUrl}/api/auth/sign-in`, {
     method: "POST",
@@ -98,6 +99,7 @@ try {
   assert.equal(initialCollabs.collabs[0].name, "My team");
   assert.equal(initialCollabs.collabs[0].role, "admin");
   const collabId = initialCollabs.collabs[0].id;
+  assert.match(collabId, /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i, "workspaces use UUIDs");
   await json(await fetch(`${baseUrl}/api/collabs`, { method: "POST", headers: ownerHeaders, body: JSON.stringify({ name: "Another workspace" }) }), 405, "workspace creation is disabled");
   const profile = await json(await fetch(`${baseUrl}/api/profile`, { method: "PATCH", headers: ownerHeaders, body: JSON.stringify({ displayName: "Owner Example" }) }), 200, "profile update");
   assert.equal(profile.user.displayName, "Owner Example");
@@ -114,10 +116,17 @@ try {
   assert.equal(directory.members[0].role, "admin");
   assert.equal(directory.members[0].displayName, "Owner Example");
 
+  await json(await fetch(`${baseUrl}/api/collabs/${collabId}/invitations`, {
+    method: "POST", headers: { origin, "content-type": "application/json" }, body: "{}",
+  }), 401, "anonymous member-code creation");
+  const firstCode = await json(await fetch(`${baseUrl}/api/collabs/${collabId}/invitations`, {
+    method: "POST", headers: ownerHeaders, body: "{}",
+  }), 201, "first member code");
+  assert.match(firstCode.invitation.code, /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/, "member code is six human-friendly characters");
   const invitation = await json(await fetch(`${baseUrl}/api/collabs/${collabId}/invitations`, {
-    method: "POST", headers: ownerHeaders, body: JSON.stringify({ email: "employee@example.test" }),
-  }), 201, "employee invitation");
-  assert.ok(invitation.invitation.token, "an invitation token should be returned exactly once at creation");
+    method: "POST", headers: ownerHeaders, body: "{}",
+  }), 201, "rotated member code");
+  assert.match(invitation.invitation.code, /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/, "rotated member code is six human-friendly characters");
   await json(await fetch(`${baseUrl}/api/auth/sign-up`, {
     method: "POST",
     headers: { "content-type": "application/json", origin, "x-forwarded-for": "203.0.113.12" },
@@ -127,8 +136,23 @@ try {
   await json(await fetch(`${baseUrl}/api/auth/sign-up`, {
     method: "POST",
     headers: { "content-type": "application/json", origin, "x-forwarded-for": "203.0.113.13" },
-    body: JSON.stringify({ email: "employee@example.test", password: "IntegrationPassword!2026", invitationToken: invitation.invitation.token }),
+    body: JSON.stringify({ email: "rotated-out@example.test", password: "IntegrationPassword!2026", invitationCode: firstCode.invitation.code }),
+  }), 403, "rotated member code is rejected");
+
+  await json(await fetch(`${baseUrl}/api/auth/sign-up`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin, "x-forwarded-for": "203.0.113.15" },
+    body: JSON.stringify({ email: "employee@example.test", password: "IntegrationPassword!2026", invitationCode: invitation.invitation.code }),
   }), 201, "invited registration");
+
+  const uninvitedCookie = (await fetch(`${baseUrl}/api/auth/sign-in`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin, "x-forwarded-for": "203.0.113.16" },
+    body: JSON.stringify({ email: "uninvited@example.test", password: "IntegrationPassword!2026" }),
+  })).headers.get("set-cookie").split(";", 1)[0];
+  await json(await fetch(`${baseUrl}/api/collabs/${collabId}/members`, { headers: { cookie: uninvitedCookie } }), 403, "other-workspace directory denied");
+  await json(await fetch(`${baseUrl}/api/dashboard?collabId=${collabId}&timeZone=UTC`), 401, "anonymous dashboard denied");
+  await json(await fetch(`${baseUrl}/api/dashboard?collabId=${collabId}&timeZone=UTC`, { headers: { cookie: uninvitedCookie } }), 403, "other-workspace dashboard denied");
 
   const employeeCookieHeader = (await fetch(`${baseUrl}/api/auth/sign-in`, {
     method: "POST",

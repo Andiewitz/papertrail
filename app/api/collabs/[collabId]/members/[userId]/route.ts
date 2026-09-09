@@ -7,12 +7,15 @@ import { z } from "zod";
 
 export const runtime = "nodejs";
 const schema = z.object({ role: z.enum(["co_admin", "member"]).optional(), status: z.enum(["active", "deactivated"]).optional() }).strict().refine((value) => value.role !== undefined || value.status !== undefined, "Choose a member change.");
+const routeParamsSchema = z.object({ collabId: z.string().uuid(), userId: z.string().uuid() });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ collabId: string; userId: string }> }) {
   try {
     if (!assertSameOrigin(request)) return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
     const actor = await currentUser(); if (!actor) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-    const { collabId, userId } = await params; const actorMembership = await requireCollabPermission(actor.id, collabId, "manage_members");
+    const routeParams = routeParamsSchema.safeParse(await params);
+    if (!routeParams.success) return NextResponse.json({ error: "Choose valid workspace and member IDs." }, { status: 400 });
+    const { collabId, userId } = routeParams.data; const actorMembership = await requireCollabPermission(actor.id, collabId, "manage_members");
     const input = schema.safeParse(await request.json()); if (!input.success) return NextResponse.json({ error: input.error.issues[0]?.message ?? "Invalid member change." }, { status: 400 });
     if (actor.id === userId) return NextResponse.json({ error: "You cannot change your own role from this endpoint." }, { status: 400 });
     const client = await db(); const target = await client.execute({ sql: "SELECT role FROM collab_memberships WHERE collab_id = ? AND user_id = ? LIMIT 1", args: [collabId, userId] });

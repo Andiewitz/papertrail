@@ -8,6 +8,7 @@ import { z } from "zod";
 export const runtime = "nodejs";
 
 const workspaceSchema = z.object({ name: z.string().trim().min(2, "Enter at least 2 characters.").max(80, "Use 80 characters or fewer.") }).strict();
+const collabIdSchema = z.string().uuid();
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ collabId: string }> }) {
   try {
@@ -15,6 +16,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ co
     const user = await currentUser();
     if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     const { collabId } = await params;
+    if (!collabIdSchema.safeParse(collabId).success) return NextResponse.json({ error: "Choose a valid workspace." }, { status: 400 });
     await requireCollabPermission(user.id, collabId, "configure_collab");
     const input = workspaceSchema.safeParse(await request.json());
     if (!input.success) return NextResponse.json({ error: input.error.issues[0]?.message ?? "Enter a valid workspace name." }, { status: 400 });

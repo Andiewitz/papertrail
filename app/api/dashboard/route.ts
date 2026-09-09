@@ -1,4 +1,5 @@
-import { currentUser } from "@/lib/auth";
+import { currentCollabUser } from "@/lib/auth";
+import { CollabAccessError } from "@/lib/collab";
 import { db } from "@/lib/db";
 import { logError } from "@/lib/log";
 import { NextResponse } from "next/server";
@@ -41,10 +42,10 @@ function toEntry(row: Row): Entry {
 
 export async function GET(request: Request) {
   try {
-    const user = await currentUser();
-    if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     const collabId = collabIdSchema.safeParse(new URL(request.url).searchParams.get("collabId"));
     if (!collabId.success) return NextResponse.json({ error: "Choose a valid workspace." }, { status: 400 });
+    const user = await currentCollabUser(collabId.data, "view_workspace");
+    if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
 
     const now = Date.now();
     const since = now - LOOKBACK_DAYS * DAY_MS;
@@ -85,6 +86,7 @@ export async function GET(request: Request) {
     }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     logError("dashboard_summary_load_failed", error);
+    if (error instanceof CollabAccessError) return NextResponse.json({ error: error.message, code: error.code }, { status: 403 });
     const debug = process.env.NODE_ENV !== "production" && error instanceof Error ? { debug: error.message } : {};
     return NextResponse.json({ error: "Your work snapshot could not be loaded.", code: "DASHBOARD_SUMMARY_LOAD_FAILED", ...debug }, { status: 500 });
   }

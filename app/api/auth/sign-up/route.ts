@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const user = { id: newUserId(), email: input.data.email, passwordHash: await hashPassword(input.data.password) };
     await client.execute({ sql: "INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)", args: [user.id, user.email, user.passwordHash, Date.now()] });
     try {
-      if (input.data.invitationToken) await acceptCollabInvitation(user.id, user.email, input.data.invitationToken);
+      if (input.data.invitationCode) await acceptCollabInvitation(user.id, input.data.invitationCode);
       else await createCollab(user.id, "My team");
     } catch (error) {
       await client.execute({ sql: "DELETE FROM collabs WHERE created_by_user_id = ?", args: [user.id] });

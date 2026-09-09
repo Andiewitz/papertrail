@@ -27,7 +27,7 @@ export const signInCredentialsSchema = credentialsSchema.extend({
 
 export const signUpCredentialsSchema = credentialsSchema.extend({
   password: z.string().min(12, "Use at least 12 characters.").max(128),
-  invitationToken: z.string().trim().min(20).max(200).optional(),
+  invitationCode: z.string().trim().toUpperCase().regex(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/, "Enter the six-character member code.").optional(),
 });
 
 function hashToken(token: string) {

@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 
 export const collabRoles = ["admin", "co_admin", "member"] as const;
 export type CollabRole = typeof collabRoles[number];
-export type CollabPermission = "view_directory" | "clock_self" | "view_own_time" | "view_team_time" | "invite_members" | "manage_members" | "export_team_time" | "approve_time" | "configure_collab" | "transfer_admin" | "delete_collab";
+export type CollabPermission = "view_workspace" | "view_directory" | "clock_self" | "view_own_time" | "view_team_time" | "invite_members" | "manage_members" | "export_team_time" | "approve_time" | "configure_collab" | "transfer_admin" | "delete_collab";
 export type CollabMembership = { collabId: string; collabName: string; userId: string; role: CollabRole; status: "active" | "deactivated" };
 
 export class CollabAccessError extends Error {
@@ -12,14 +12,21 @@ export class CollabAccessError extends Error {
 }
 
 const permissions: Record<CollabRole, ReadonlySet<CollabPermission>> = {
-  admin: new Set(["view_directory", "view_team_time", "invite_members", "manage_members", "export_team_time", "approve_time", "configure_collab", "transfer_admin", "delete_collab"]),
-  co_admin: new Set(["view_directory", "clock_self", "view_own_time", "view_team_time", "invite_members", "manage_members", "export_team_time", "approve_time"]),
-  member: new Set(["view_directory", "clock_self", "view_own_time"]),
+  admin: new Set(["view_workspace", "view_directory", "view_team_time", "invite_members", "manage_members", "export_team_time", "approve_time", "configure_collab", "transfer_admin", "delete_collab"]),
+  co_admin: new Set(["view_workspace", "view_directory", "clock_self", "view_own_time", "view_team_time", "invite_members", "manage_members", "export_team_time", "approve_time"]),
+  member: new Set(["view_workspace", "view_directory", "clock_self", "view_own_time"]),
 };
 
 export function hasCollabPermission(role: CollabRole, permission: CollabPermission) { return permissions[role].has(permission); }
-export function invitationHash(token: string) { return createHmac("sha256", authSecret()).update(`collab-invitation:${token}`).digest("hex"); }
-export function newInvitationToken() { return randomBytes(32).toString("base64url"); }
+const MEMBER_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const MEMBER_CODE_LENGTH = 6;
+
+export function memberCodeHash(code: string) { return createHmac("sha256", authSecret()).update(`collab-member-code:${code}`).digest("hex"); }
+export function normalizeMemberCode(code: string) { return code.trim().toUpperCase(); }
+export function newMemberCode() {
+  const bytes = randomBytes(MEMBER_CODE_LENGTH);
+  return [...bytes].map((byte) => MEMBER_CODE_ALPHABET[byte & 31]).join("");
+}
 
 export async function createCollab(userId: string, name: string) {
   const collab = { id: randomUUID(), name: name.trim(), now: Date.now() };
@@ -49,14 +56,12 @@ export async function requireCollabPermission(userId: string, collabId: string, 
   return membership;
 }
 
-export async function acceptCollabInvitation(userId: string, email: string, token: string) {
+export async function acceptCollabInvitation(userId: string, code: string) {
   const client = await db();
-  const found = await client.execute({ sql: "SELECT id, collab_id FROM collab_invitations WHERE token_hash = ? AND email = ? AND accepted_at IS NULL AND expires_at > ? LIMIT 1", args: [invitationHash(token), email, Date.now()] });
-  const row = found.rows[0];
-  if (!row) throw new CollabAccessError("COLLAB_NOT_FOUND", "This invitation is invalid, expired, or assigned to another email address.");
   const now = Date.now();
-  await client.batch([
-    { sql: "INSERT INTO collab_memberships (collab_id, user_id, role, status, created_at) VALUES (?, ?, 'member', 'active', ?)", args: [String(row.collab_id), userId, now] },
-    { sql: "UPDATE collab_invitations SET accepted_at = ? WHERE id = ? AND accepted_at IS NULL", args: [now, String(row.id)] },
+  const result = await client.batch([
+    { sql: "UPDATE collab_invitations SET accepted_at = ?, accepted_by_user_id = ? WHERE code_hash = ? AND accepted_at IS NULL AND expires_at > ?", args: [now, userId, memberCodeHash(normalizeMemberCode(code)), now] },
+    { sql: "INSERT INTO collab_memberships (collab_id, user_id, role, status, created_at) SELECT collab_id, ?, 'member', 'active', ? FROM collab_invitations WHERE code_hash = ? AND accepted_by_user_id = ?", args: [userId, now, memberCodeHash(normalizeMemberCode(code)), userId] },
   ], "write");
+  if (result[1].rowsAffected !== 1) throw new CollabAccessError("COLLAB_NOT_FOUND", "That member code is invalid, expired, or has already been used.");
 }
