@@ -775,3 +775,55 @@ textarea { font-family: inherit; }
   .dashboard-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .dashboard-summary-grid article, .dashboard-summary-loading i { min-height: 121px; padding: 14px; }
 }
+
+/* Compact workspace density: controls are tools, not cards. */
+.unified-dashboard .time-workspace { padding-top: 36px; padding-bottom: 40px; }
+.unified-dashboard .workspace-header { gap: 14px; padding-bottom: 18px; }
+.unified-dashboard .workspace-actions { gap: 6px; }
+.unified-dashboard .workspace-header .workspace-actions > button {
+  min-height: 30px;
+  border-radius: 6px;
+  padding: 5px 9px;
+  box-shadow: none;
+  font-size: .71rem;
+}
+.unified-dashboard .status-chip { padding: 5px 8px; font-size: .7rem; box-shadow: none; }
+.unified-dashboard .clock-card {
+  gap: 20px;
+  margin-top: 24px;
+  border-radius: 12px;
+  padding: 20px 22px;
+  box-shadow: 0 5px 13px rgba(50, 92, 89, .09);
+}
+.unified-dashboard .clock-card h2 { font-size: 1.25rem; }
+.unified-dashboard .clock-button { min-width: 118px; height: 38px; border-radius: 7px; font-size: .75rem; box-shadow: 0 4px 9px rgba(47, 99, 95, .15); }
+.unified-dashboard .time-metrics { gap: 10px; margin: 14px 0; }
+.unified-dashboard .time-metrics article { min-height: 94px; border-radius: 10px; padding: 13px 14px; box-shadow: 0 3px 9px rgba(69, 66, 60, .06); }
+.unified-dashboard .time-metrics p { margin: 6px 0 2px; }
+.unified-dashboard .time-metrics strong { font-size: 1.35rem; }
+.unified-dashboard .history-card { margin-top: 18px; border-radius: 11px; padding: 18px 20px; box-shadow: 0 4px 12px rgba(69, 66, 60, .07); }
+.unified-dashboard .history-heading h2 { font-size: 1.22rem; }
+.unified-dashboard .history-heading button { border-radius: 6px; padding: 5px 8px; box-shadow: none; }
+.unified-dashboard .collab-overview { gap: 11px; }
+.unified-dashboard .collab-overview-intro { gap: 18px; border-radius: 11px; padding: 18px 20px; }
+.unified-dashboard .collab-overview-intro h2 { font-size: 1.4rem; }
+.unified-dashboard .collab-overview-intro .clock-button { height: 34px; padding: 7px 10px; }
+.unified-dashboard .collab-overview-grid { gap: 10px; }
+.unified-dashboard .collab-overview-grid article { border-radius: 10px; padding: 13px 14px; box-shadow: 0 3px 9px rgba(69, 66, 60, .05); }
+.unified-dashboard .collab-overview-grid span { font-size: 1.45rem; }
+.unified-dashboard .workspace-team-card { border-radius: 10px; padding: 15px 16px; box-shadow: 0 3px 9px rgba(69, 66, 60, .05); }
+.unified-dashboard .workspace-person { padding: 9px 0; }
+.unified-dashboard .workspace-person > span { width: 28px; height: 28px; }
+.unified-dashboard .workspace-panel { top: 18px; right: 18px; width: min(340px, calc(100vw - 36px)); max-height: calc(100vh - 36px); border-radius: 12px; padding: 16px; box-shadow: 0 12px 28px rgba(49, 45, 40, .16); }
+.unified-dashboard .workspace-panel header { margin-bottom: 12px; }
+.unified-dashboard .workspace-panel h2 { font-size: 1.22rem; }
+.unified-dashboard .workspace-invite-form, .unified-dashboard .workspace-invite-success { gap: 9px; }
+.unified-dashboard .workspace-invite-form p, .unified-dashboard .workspace-invite-success p { margin: 0; }
+.unified-dashboard .workspace-invite-success input { border-radius: 7px; padding: 8px 10px; letter-spacing: .16em; font-size: .92rem; font-weight: 800; }
+.unified-dashboard .workspace-invite-success > button:not(.workspace-link-button), .unified-dashboard .workspace-invite-form .clock-button { min-width: 0; height: 34px; border-radius: 6px; padding: 7px 10px; box-shadow: none; font-size: .72rem; }
+
+@media (max-width: 620px) {
+  .unified-dashboard .clock-card { padding: 17px; }
+  .unified-dashboard .clock-button { width: auto; margin-top: 12px; }
+  .unified-dashboard .collab-overview-intro { padding: 16px; }
+}
