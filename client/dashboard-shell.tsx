@@ -4,7 +4,6 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AuthForm from "@/client/auth-form";
-import SettingsPanel from "@/client/settings-panel";
 
 type User = { id: string; email: string; displayName: string | null };
 export type Collab = { id: string; name: string; role: "admin" | "co_admin" | "member" };
@@ -12,6 +11,8 @@ type DashboardContext = {
   user: User; collabs: Collab[]; loading: boolean; error: string;
   refreshCollabs: () => Promise<void>;
   requireSignIn: () => void;
+  updateUser: (user: User) => void;
+  updateWorkspaceName: (name: string) => void;
 };
 const Context = createContext<DashboardContext | null>(null);
 export function useDashboard() {
@@ -38,7 +39,6 @@ export default function DashboardShell({ children, initialUser }: { children: Re
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [collapsed, setCollapsed] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const requireSignIn = useCallback(() => setUser(null), []);
   const refreshCollabs = useCallback(async () => {
     setLoading(true); setError("");
@@ -56,7 +56,6 @@ export default function DashboardShell({ children, initialUser }: { children: Re
     setCollabs([]);
     if (user) void refreshCollabs();
   }, [user, refreshCollabs]);
-  useEffect(() => { if (user && !user.displayName) setSettingsOpen(true); }, [user]);
   function toggleSidebar() {
     setCollapsed((current) => { localStorage.setItem("papertrail-sidebar", current ? "expanded" : "collapsed"); return !current; });
   }
@@ -70,7 +69,8 @@ export default function DashboardShell({ children, initialUser }: { children: Re
   if (!user) return <AuthForm onAuthenticated={setUser} />;
   const name = user.displayName ?? user.email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   const workspace = collabs[0];
-  return <Context.Provider value={{ user, collabs, loading, error, refreshCollabs, requireSignIn }}>
+  const updateWorkspaceName = (name: string) => setCollabs((current) => current.map((collab) => collab.id === workspace?.id ? { ...collab, name } : collab));
+  return <Context.Provider value={{ user, collabs, loading, error, refreshCollabs, requireSignIn, updateUser: setUser, updateWorkspaceName }}>
     <main className="time-app unified-dashboard">
       <div className={`time-shell${collapsed ? " sidebar-collapsed" : ""}`}>
         <aside className="time-sidebar">
@@ -80,14 +80,13 @@ export default function DashboardShell({ children, initialUser }: { children: Re
             <Link className={`time-nav${pathname === "/" ? " active" : ""}`} href="/" title="Dashboard" aria-current={pathname === "/" ? "page" : undefined}><DashboardIcon name="home" /><span className="nav-label">Dashboard</span></Link>
             {workspace && <Link className={`time-nav${pathname.startsWith(`/collabs/${workspace.id}`) ? " active" : ""}`} href={`/collabs/${workspace.id}`} title="Workspace" aria-current={pathname === `/collabs/${workspace.id}` ? "page" : undefined}><DashboardIcon name="collab" /><span className="nav-label">Workspace</span></Link>}
           </nav>
-          <div className="time-sidebar-footer"><p><DashboardIcon name="clock" /><span className="sidebar-security">Your people. Your workspace.</span></p><button onClick={() => setSettingsOpen(true)} title="Settings" type="button"><DashboardIcon name="settings" /><span className="logout-label">Settings</span></button><button onClick={() => void signOut()} title="Sign out" type="button"><DashboardIcon name="logout" /><span className="logout-label">Sign out</span></button></div>
+          <div className="time-sidebar-footer"><p><DashboardIcon name="clock" /><span className="sidebar-security">Your people. Your workspace.</span></p><Link className={`time-nav sidebar-settings-link${pathname === "/settings" ? " active" : ""}`} href="/settings" title="Settings"><DashboardIcon name="settings" /><span className="nav-label">Settings</span></Link><button onClick={() => void signOut()} title="Sign out" type="button"><DashboardIcon name="logout" /><span className="logout-label">Sign out</span></button></div>
         </aside>
         <section className="time-workspace" id="dashboard">
           {error && <div className="time-notice error" role="alert">{error}<button onClick={() => void refreshCollabs()} type="button">Retry</button></div>}
           {children}
         </section>
       </div>
-      <SettingsPanel onClose={() => setSettingsOpen(false)} onUserUpdated={setUser} onWorkspaceUpdated={(name) => setCollabs((current) => current.map((collab) => collab.id === workspace?.id ? { ...collab, name } : collab))} open={settingsOpen} user={user} workspace={workspace} />
     </main>
   </Context.Provider>;
 }

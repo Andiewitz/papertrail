@@ -48,7 +48,8 @@ export default function CollabHome() {
   }, [requireSignIn]);
 
   return <>
-    <header className="time-header dashboard-home-heading"><div><p>Dashboard</p><h1>Good to see you, {displayName(user.email).split(" ")[0]}.</h1></div></header>
+    <header className="time-header dashboard-home-heading"><div><p>Dashboard</p><h1>Good to see you, {(user.displayName ?? displayName(user.email)).split(" ")[0]}.</h1></div></header>
+    {!user.displayName && <section className="profile-nudge"><div><p className="section-kicker">One last detail</p><h2>What should your team call you?</h2><p>Add your name once so your directory is clear for everyone.</p></div><Link href="/settings">Add your name <span aria-hidden="true">→</span></Link></section>}
     <section aria-labelledby="workspace-title" className="single-workspace-overview">
       {loading ? <p role="status">Loading your workspace…</p> : workspace ? <><div><p className="section-kicker">Your workspace</p><h2 id="workspace-title">{workspace.name}</h2><p>Manage your people, invitations, and attendance in one place.</p></div><Link href={`/collabs/${workspace.id}`}>Open workspace <span aria-hidden="true">→</span></Link></> : <div><p className="section-kicker">Your workspace</p><h2 id="workspace-title">Setting up your team</h2><p>Your workspace is being prepared. Refresh in a moment if it does not appear.</p></div>}
     </section>
