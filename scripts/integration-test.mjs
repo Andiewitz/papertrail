@@ -157,8 +157,8 @@ try {
   const breakStart = await json(await fetch(employeeTimeUrl, {
     method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "break-start" }),
   }), 201, "start break");
-  assert.equal(breakStart.entry.breaks.length, 1);
-  assert.equal(breakStart.entry.breaks[0].endedAt, null);
+  assert.equal(breakStart.entryId, clockIn.entry.id);
+  assert.equal(breakStart.break.endedAt, null);
 
   const duplicateBreakStart = await json(await fetch(employeeTimeUrl, {
     method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "break-start" }),
@@ -172,7 +172,8 @@ try {
   const breakEnd = await json(await fetch(employeeTimeUrl, {
     method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "break-end" }),
   }), 200, "end break");
-  assert.notEqual(breakEnd.entry.breaks[0].endedAt, null);
+  assert.equal(breakEnd.entryId, clockIn.entry.id);
+  assert.notEqual(breakEnd.break.endedAt, null);
 
   const clockOut = await json(await fetch(employeeTimeUrl, {
     method: "POST", headers: authenticatedHeaders, body: JSON.stringify({ action: "clock-out", entryId: clockIn.entry.id }),
@@ -188,6 +189,8 @@ try {
   assert.equal(history.entries.length, 1);
   assert.equal(history.entries[0].id, clockIn.entry.id);
   assert.notEqual(history.entries[0].clockOut, null);
+  assert.equal(history.entries[0].breaks.length, 1);
+  assert.notEqual(history.entries[0].breaks[0].endedAt, null);
 
   await json(await fetch(employeeTimeUrl, {
     method: "POST",

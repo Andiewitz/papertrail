@@ -121,7 +121,7 @@ export default function TimeDashboard({ collabId }: { collabId: string }) {
         if (response.status === 409) void loadEntries();
         throw new Error(data.error ?? "Your time entry could not be updated.");
       }
-      updateTimeEntry(data.entry);
+      updateTimeEntry(action === "clock-out" && !data.alreadyClockedOut && activeEntry ? { ...activeEntry, ...data.entry, breaks: activeEntry.breaks } : data.entry);
       invalidateDashboardStats();
       setNow(Date.now());
       setNotice({ type: "success", text: action === "clock-in" ? data.alreadyClockedIn ? "Your active shift is already recorded." : "You’re clocked in. Have a great shift." : data.alreadyClockedOut ? "Your clock-out was already recorded." : "You’re clocked out. Your hours have been recorded." });
@@ -137,7 +137,15 @@ export default function TimeDashboard({ collabId }: { collabId: string }) {
       const data = await response.json();
       if (response.status === 401) { requireSignIn(); return; }
       if (!response.ok) throw new Error(data.error ?? "Your break could not be updated.");
-      updateTimeEntry(data.entry);
+      if (data.entry) updateTimeEntry(data.entry);
+      else if (data.entryId === activeEntry.id && data.break) {
+        updateTimeEntry({
+          ...activeEntry,
+          breaks: activeBreak
+            ? activeEntry.breaks.map((item) => item.id === data.break.id ? { ...item, endedAt: data.break.endedAt } : item)
+            : [...activeEntry.breaks, data.break],
+        });
+      }
       invalidateDashboardStats();
       setNow(Date.now());
       setNotice({ type: "success", text: activeBreak ? "Your break has ended. You’re back on the clock." : "Your break has started. Paid time is paused." });
