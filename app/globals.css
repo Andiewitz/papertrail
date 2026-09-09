@@ -494,7 +494,8 @@ textarea { font-family: inherit; }
 
 .time-shell,
 .time-shell.sidebar-collapsed {
-  width: min(1380px, calc(100vw - 64px));
+  width: calc(100vw - 64px);
+  max-width: none;
   min-height: calc(100vh - 64px);
   margin: auto;
   overflow: hidden;
