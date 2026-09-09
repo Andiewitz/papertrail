@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { Nunito } from "next/font/google";
 import "./globals.css";
-import DashboardShell from "@/client/dashboard-shell";
+import DashboardShell, { type Collab } from "@/client/dashboard-shell";
 import { currentUser } from "@/lib/auth";
+import { listCollabs } from "@/lib/collab";
 
 const nunito = Nunito({
   subsets: ["latin"],
@@ -17,5 +18,6 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const user = await currentUser().catch(() => null);
-  return <html lang="en"><body className={nunito.variable}><DashboardShell initialUser={user}>{children}</DashboardShell></body></html>;
+  const collabs: Collab[] | null = user ? await listCollabs(user.id).catch(() => null) : [];
+  return <html lang="en"><body className={nunito.variable}><DashboardShell initialCollabs={collabs} initialUser={user}>{children}</DashboardShell></body></html>;
 }

@@ -32,14 +32,15 @@ export function DashboardIcon({ name }: { name: "clock" | "home" | "panel" | "lo
   return <svg aria-hidden="true" className="time-icon" viewBox="0 0 24 24">{paths[name]}</svg>;
 }
 
-export default function DashboardShell({ children, initialUser }: { children: ReactNode; initialUser: User | null }) {
+export default function DashboardShell({ children, initialCollabs, initialUser }: { children: ReactNode; initialCollabs: Collab[] | null; initialUser: User | null }) {
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(initialUser);
-  const [collabs, setCollabs] = useState<Collab[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [collabs, setCollabs] = useState<Collab[]>(initialCollabs ?? []);
+  const [loading, setLoading] = useState(initialUser !== null && initialCollabs === null);
+  const [usingServerCollabs, setUsingServerCollabs] = useState(initialUser !== null && initialCollabs !== null);
   const [error, setError] = useState("");
   const [collapsed, setCollapsed] = useState(false);
-  const requireSignIn = useCallback(() => setUser(null), []);
+  const requireSignIn = useCallback(() => { setUsingServerCollabs(false); setUser(null); }, []);
   const refreshCollabs = useCallback(async () => {
     setLoading(true); setError("");
     try {
@@ -53,9 +54,10 @@ export default function DashboardShell({ children, initialUser }: { children: Re
   }, []);
   useEffect(() => { setCollapsed(localStorage.getItem("papertrail-sidebar") === "collapsed"); }, []);
   useEffect(() => {
-    setCollabs([]);
-    if (user) void refreshCollabs();
-  }, [user, refreshCollabs]);
+    if (!user) { setCollabs([]); setLoading(false); return; }
+    if (usingServerCollabs) return;
+    void refreshCollabs();
+  }, [refreshCollabs, user, usingServerCollabs]);
   function toggleSidebar() {
     setCollapsed((current) => { localStorage.setItem("papertrail-sidebar", current ? "expanded" : "collapsed"); return !current; });
   }
@@ -63,10 +65,10 @@ export default function DashboardShell({ children, initialUser }: { children: Re
     try {
       const response = await fetch("/api/auth/sign-out", { method: "POST" });
       if (!response.ok) throw new Error();
-      setUser(null); setCollabs([]);
+      setUsingServerCollabs(false); setUser(null); setCollabs([]);
     } catch { setError("We couldn’t sign you out. Please try again."); }
   }
-  if (!user) return <AuthForm onAuthenticated={setUser} />;
+  if (!user) return <AuthForm onAuthenticated={(nextUser) => { setUsingServerCollabs(false); setUser(nextUser); }} />;
   const name = user.displayName ?? user.email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   const workspace = collabs[0];
   const updateWorkspaceName = (name: string) => setCollabs((current) => current.map((collab) => collab.id === workspace?.id ? { ...collab, name } : collab));
@@ -77,10 +79,10 @@ export default function DashboardShell({ children, initialUser }: { children: Re
           <div className="sidebar-brand-row"><Link className="brand" href="/"><span className="brand-mark"><i /><i /><i /></span><span className="brand-label">Papertrail</span></Link><button aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} className="sidebar-toggle" onClick={toggleSidebar} type="button"><DashboardIcon name="panel" /></button></div>
           <div className="employee-summary"><span>{name[0]?.toUpperCase()}</span><div className="employee-copy"><strong>{name}</strong><small title={user.email}>{user.email}</small></div></div>
           <nav aria-label="Main navigation">
-            <Link className={`time-nav${pathname === "/" ? " active" : ""}`} href="/" title="Dashboard" aria-current={pathname === "/" ? "page" : undefined}><DashboardIcon name="home" /><span className="nav-label">Dashboard</span></Link>
-            {workspace && <Link className={`time-nav${pathname.startsWith(`/collabs/${workspace.id}`) ? " active" : ""}`} href={`/collabs/${workspace.id}`} title="Workspace" aria-current={pathname === `/collabs/${workspace.id}` ? "page" : undefined}><DashboardIcon name="collab" /><span className="nav-label">Workspace</span></Link>}
+            <Link className={`time-nav${pathname === "/" ? " active" : ""}`} href="/" prefetch title="Dashboard" aria-current={pathname === "/" ? "page" : undefined}><DashboardIcon name="home" /><span className="nav-label">Dashboard</span></Link>
+            {workspace && <Link className={`time-nav${pathname.startsWith(`/collabs/${workspace.id}`) ? " active" : ""}`} href={`/collabs/${workspace.id}`} prefetch title="Workspace" aria-current={pathname === `/collabs/${workspace.id}` ? "page" : undefined}><DashboardIcon name="collab" /><span className="nav-label">Workspace</span></Link>}
           </nav>
-          <div className="time-sidebar-footer"><p><DashboardIcon name="clock" /><span className="sidebar-security">Your people. Your workspace.</span></p><Link className={`time-nav sidebar-settings-link${pathname === "/settings" ? " active" : ""}`} href="/settings" title="Settings"><DashboardIcon name="settings" /><span className="nav-label">Settings</span></Link><button onClick={() => void signOut()} title="Sign out" type="button"><DashboardIcon name="logout" /><span className="logout-label">Sign out</span></button></div>
+          <div className="time-sidebar-footer"><p><DashboardIcon name="clock" /><span className="sidebar-security">Your people. Your workspace.</span></p><Link className={`time-nav sidebar-settings-link${pathname === "/settings" ? " active" : ""}`} href="/settings" prefetch title="Settings"><DashboardIcon name="settings" /><span className="nav-label">Settings</span></Link><button onClick={() => void signOut()} title="Sign out" type="button"><DashboardIcon name="logout" /><span className="logout-label">Sign out</span></button></div>
         </aside>
         <section className="time-workspace" id="dashboard">
           {error && <div className="time-notice error" role="alert">{error}<button onClick={() => void refreshCollabs()} type="button">Retry</button></div>}
