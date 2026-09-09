@@ -58,41 +58,78 @@ export async function POST(request: Request) {
     const input = schema.safeParse(await request.json());
     if (!input.success) return NextResponse.json({ error: "Choose a valid timekeeping action." }, { status: 400 });
     const client = await db(); const now = Date.now();
+    const activeEntry = async () => {
+      const result = await client.execute({ sql: "SELECT id FROM time_entries WHERE user_id = ? AND collab_id = ? AND clock_out IS NULL LIMIT 1", args: [user.id, collabId] });
+      return result.rows[0] ? Number(result.rows[0].id) : null;
+    };
+
     if (input.data.action === "clock-in") {
-      const active = await client.execute({ sql: "SELECT id FROM time_entries WHERE user_id = ? AND collab_id = ? AND clock_out IS NULL", args: [user.id, collabId] });
-      if (active.rows[0]) return NextResponse.json({ entry: await withBreaks(client, Number(active.rows[0].id)), alreadyClockedIn: true });
+      let clockInError: unknown;
       try {
-        const result = await client.execute({ sql: "INSERT INTO time_entries (user_id, collab_id, clock_in, created_at) VALUES (?, ?, ?, ?) RETURNING id, clock_in, clock_out", args: [user.id, collabId, now, now] });
-        return NextResponse.json({ entry: entry(result.rows[0]), alreadyClockedIn: false }, { status: 201 });
+        const result = await client.execute({
+          sql: "INSERT INTO time_entries (user_id, collab_id, clock_in, created_at) SELECT ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM time_entries WHERE user_id = ? AND collab_id = ? AND clock_out IS NULL) RETURNING id, clock_in, clock_out",
+          args: [user.id, collabId, now, now, user.id, collabId],
+        });
+        if (result.rows[0]) return NextResponse.json({ entry: entry(result.rows[0]), alreadyClockedIn: false }, { status: 201 });
       } catch (error) {
-        const active = await client.execute({ sql: "SELECT id FROM time_entries WHERE user_id = ? AND collab_id = ? AND clock_out IS NULL", args: [user.id, collabId] });
-        if (active.rows[0]) return NextResponse.json({ entry: await withBreaks(client, Number(active.rows[0].id)), alreadyClockedIn: true });
-        throw error;
+        // A concurrent clock-in can still hit the database uniqueness constraint.
+        // Resolve it below as the idempotent success response.
+        clockInError = error;
       }
+      const activeId = await activeEntry();
+      if (activeId) return NextResponse.json({ entry: await withBreaks(client, activeId), alreadyClockedIn: true });
+      if (clockInError) throw clockInError;
+      throw new Error("Clock-in was not created and no active entry was found.");
     }
-    const active = await client.execute({ sql: "SELECT id FROM time_entries WHERE user_id = ? AND collab_id = ? AND clock_out IS NULL LIMIT 1", args: [user.id, collabId] });
-    if (!active.rows[0]) {
-      if (input.data.action === "clock-out" && input.data.entryId) {
-        const completed = await client.execute({ sql: "SELECT id FROM time_entries WHERE id = ? AND user_id = ? AND collab_id = ? AND clock_out IS NOT NULL", args: [input.data.entryId, user.id, collabId] });
-        if (completed.rows[0]) return NextResponse.json({ entry: await withBreaks(client, Number(completed.rows[0].id)), alreadyClockedOut: true });
-      }
-      return NextResponse.json({ error: input.data.action === "break-end" ? "You are not currently on a break." : "You are not currently clocked in." }, { status: 409 });
-    }
-    const activeId = Number(active.rows[0].id);
-    const openBreak = await client.execute({ sql: "SELECT id FROM break_entries WHERE time_entry_id = ? AND ended_at IS NULL LIMIT 1", args: [activeId] });
+
     if (input.data.action === "break-start") {
-      if (openBreak.rows[0]) return NextResponse.json({ entry: await withBreaks(client, activeId), alreadyOnBreak: true });
-      await client.execute({ sql: "INSERT INTO break_entries (time_entry_id, started_at, created_at) VALUES (?, ?, ?)", args: [activeId, now, now] });
-      return NextResponse.json({ entry: await withBreaks(client, activeId), alreadyOnBreak: false }, { status: 201 });
+      const result = await client.execute({
+        sql: "INSERT INTO break_entries (time_entry_id, started_at, created_at) SELECT id, ?, ? FROM time_entries WHERE user_id = ? AND collab_id = ? AND clock_out IS NULL AND NOT EXISTS (SELECT 1 FROM break_entries WHERE time_entry_id = time_entries.id AND ended_at IS NULL) RETURNING time_entry_id",
+        args: [now, now, user.id, collabId],
+      });
+      if (result.rows[0]) {
+        const activeId = Number(result.rows[0].time_entry_id);
+        return NextResponse.json({ entry: await withBreaks(client, activeId), alreadyOnBreak: false }, { status: 201 });
+      }
+      const activeId = await activeEntry();
+      if (!activeId) return NextResponse.json({ error: "You are not currently clocked in." }, { status: 409 });
+      const active = await withBreaks(client, activeId);
+      if (active?.breaks.some((item) => item.endedAt === null)) return NextResponse.json({ entry: active, alreadyOnBreak: true });
+      return NextResponse.json({ error: "Your break could not be started. Please try again." }, { status: 409 });
     }
+
     if (input.data.action === "break-end") {
-      if (!openBreak.rows[0]) return NextResponse.json({ error: "You are not currently on a break." }, { status: 409 });
-      await client.execute({ sql: "UPDATE break_entries SET ended_at = ? WHERE id = ? AND ended_at IS NULL", args: [now, Number(openBreak.rows[0].id)] });
-      return NextResponse.json({ entry: await withBreaks(client, activeId), alreadyEndedBreak: false });
+      const result = await client.execute({
+        sql: "UPDATE break_entries SET ended_at = ? WHERE id = (SELECT break_entries.id FROM break_entries JOIN time_entries ON time_entries.id = break_entries.time_entry_id WHERE time_entries.user_id = ? AND time_entries.collab_id = ? AND time_entries.clock_out IS NULL AND break_entries.ended_at IS NULL LIMIT 1) AND ended_at IS NULL RETURNING time_entry_id",
+        args: [now, user.id, collabId],
+      });
+      if (result.rows[0]) {
+        const activeId = Number(result.rows[0].time_entry_id);
+        return NextResponse.json({ entry: await withBreaks(client, activeId), alreadyEndedBreak: false });
+      }
+      return NextResponse.json({ error: "You are not currently on a break." }, { status: 409 });
     }
-    if (openBreak.rows[0]) return NextResponse.json({ error: "End your active break before clocking out." }, { status: 409 });
-    await client.execute({ sql: "UPDATE time_entries SET clock_out = ? WHERE id = ? AND clock_out IS NULL", args: [now, activeId] });
-    return NextResponse.json({ entry: await withBreaks(client, activeId), alreadyClockedOut: false });
+
+    const result = await client.execute({
+      sql: "UPDATE time_entries SET clock_out = ? WHERE user_id = ? AND collab_id = ? AND clock_out IS NULL AND NOT EXISTS (SELECT 1 FROM break_entries WHERE time_entry_id = time_entries.id AND ended_at IS NULL) RETURNING id",
+      args: [now, user.id, collabId],
+    });
+    if (result.rows[0]) {
+      const activeId = Number(result.rows[0].id);
+      return NextResponse.json({ entry: await withBreaks(client, activeId), alreadyClockedOut: false });
+    }
+
+    const activeId = await activeEntry();
+    if (activeId) {
+      const openBreak = await client.execute({ sql: "SELECT id FROM break_entries WHERE time_entry_id = ? AND ended_at IS NULL LIMIT 1", args: [activeId] });
+      if (openBreak.rows[0]) return NextResponse.json({ error: "End your active break before clocking out." }, { status: 409 });
+      return NextResponse.json({ error: "Your clock-out could not be completed. Please try again." }, { status: 409 });
+    }
+    if (input.data.entryId) {
+      const completed = await client.execute({ sql: "SELECT id FROM time_entries WHERE id = ? AND user_id = ? AND collab_id = ? AND clock_out IS NOT NULL", args: [input.data.entryId, user.id, collabId] });
+      if (completed.rows[0]) return NextResponse.json({ entry: await withBreaks(client, Number(completed.rows[0].id)), alreadyClockedOut: true });
+    }
+    return NextResponse.json({ error: "You are not currently clocked in." }, { status: 409 });
   } catch (error) {
     logError("time_entry_update_failed", error);
     if (error instanceof CollabAccessError) return NextResponse.json({ error: error.message, code: error.code }, { status: 403 });
