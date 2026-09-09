@@ -4,6 +4,23 @@
 
 Make Papertrail feel immediate while preserving the serverless security model: database-backed session revocation, Collab authorization, and idempotent timekeeping. Optimize the normal single-workspace path first; do not weaken checks merely to remove a query.
 
+## Implementation status — September 2026
+
+Completed in the application:
+
+- Fresh signed-in loads bootstrap the session user and primary active workspace in one query; the browser does not repeat the normal workspace lookup.
+- Dashboard statistics and attendance history are private, in-memory browser caches with a 60-second freshness window. Clock and break responses update/invalidate those caches immediately.
+- Members do not load the directory until they request it; admins retain their useful directory summary.
+- Dashboard history is scoped to the requested workspace and uses separate active/completed entry branches inside one bounded SQL query.
+- Successful clock, break, and clock-out actions use conditional writes with `RETURNING`. Follow-up reads occur only when resolving retries or state conflicts.
+- Authentication no longer deletes every expired rate-limit row on each attempt. `npm run db:prune-rate-limits` is available for the Debian maintenance task.
+
+Deliberately deferred:
+
+- Do not add another time-entry index yet: the existing open-shift and `(collab_id, user_id, clock_in)` indexes match the implemented queries. Add an index only after production Turso metrics show a real gap.
+- Do not create a daily-summary table yet: it would add write amplification and timezone/DST design complexity for a small team.
+- Production measurement is still required after deployment. Compare Vercel function duration and Turso read/write counts for a warm Dashboard → Workspace → History sequence and one normal clock action before considering another database change.
+
 ## Baseline
 
 | Flow | Current database work | Main issue |
