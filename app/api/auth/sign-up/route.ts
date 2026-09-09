@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       await client.execute({ sql: "DELETE FROM users WHERE id = ?", args: [user.id] });
       throw error;
     }
-    const response = NextResponse.json({ user: { id: user.id, email: user.email } }, { status: 201 });
+    const response = NextResponse.json({ user: { id: user.id, email: user.email, displayName: null } }, { status: 201 });
     setSessionCookie(response, await createSession(user.id));
     return response;
   } catch (error) {

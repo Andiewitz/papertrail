@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 
-type User = { id: string; email: string };
+type User = { id: string; email: string; displayName: string | null };
 type FieldErrors = Partial<Record<"email" | "password" | "confirmPassword" | "invitationToken" | "form", string>>;
 type AuthErrorResponse = { error?: string; code?: string; debug?: string };
 

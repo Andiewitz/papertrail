@@ -71,7 +71,7 @@ try {
   const health = await json(await fetch(`${baseUrl}/api/health`), 200, "health check");
   assert.equal(health.ok, true);
   assert.equal(health.database, "connected");
-  assert.equal(health.migrations, 5);
+  assert.equal(health.migrations, 6);
 
   const noSession = await json(await fetch(`${baseUrl}/api/auth/session`), 200, "anonymous session");
   assert.equal(noSession.user, null);
@@ -99,6 +99,10 @@ try {
   assert.equal(initialCollabs.collabs[0].role, "admin");
   const collabId = initialCollabs.collabs[0].id;
   await json(await fetch(`${baseUrl}/api/collabs`, { method: "POST", headers: ownerHeaders, body: JSON.stringify({ name: "Another workspace" }) }), 405, "workspace creation is disabled");
+  const profile = await json(await fetch(`${baseUrl}/api/profile`, { method: "PATCH", headers: ownerHeaders, body: JSON.stringify({ displayName: "Owner Example" }) }), 200, "profile update");
+  assert.equal(profile.user.displayName, "Owner Example");
+  const renamedWorkspace = await json(await fetch(`${baseUrl}/api/collabs/${collabId}`, { method: "PATCH", headers: ownerHeaders, body: JSON.stringify({ name: "Integration Team" }) }), 200, "workspace rename");
+  assert.equal(renamedWorkspace.collab.name, "Integration Team");
   const employeeTimeUrl = `${baseUrl}/api/collabs/${collabId}/time`;
   for (const action of ["clock-in", "clock-out", "break-start", "break-end"]) {
     await json(await fetch(employeeTimeUrl, { method: "POST", headers: ownerHeaders, body: JSON.stringify({ action }) }), 403, `owner cannot ${action}`);
@@ -108,6 +112,7 @@ try {
   const directory = await json(await fetch(`${baseUrl}/api/collabs/${collabId}/members`, { headers: { cookie: ownerCookie } }), 200, "collab directory");
   assert.equal(directory.members.length, 1);
   assert.equal(directory.members[0].role, "admin");
+  assert.equal(directory.members[0].displayName, "Owner Example");
 
   const invitation = await json(await fetch(`${baseUrl}/api/collabs/${collabId}/invitations`, {
     method: "POST", headers: ownerHeaders, body: JSON.stringify({ email: "employee@example.test" }),

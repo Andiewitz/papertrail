@@ -12,7 +12,7 @@ const COOKIE_NAME = "session";
 const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 7;
 const PASSWORD_KEY_LENGTH = 64;
 
-export type SessionUser = { id: string; email: string };
+export type SessionUser = { id: string; email: string; displayName: string | null };
 export type SessionCollabUser = SessionUser & { collabId: string; collabName: string; role: CollabRole };
 
 const credentialsSchema = z.object({
@@ -52,13 +52,13 @@ export async function currentUser(): Promise<SessionUser | null> {
   if (!token) return null;
   const client = await db();
   const now = Date.now();
-  const result = await client.execute({ sql: "SELECT users.id, users.email, sessions.expires_at FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.id = ?", args: [hashToken(token)] });
+  const result = await client.execute({ sql: "SELECT users.id, users.email, users.display_name, sessions.expires_at FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.id = ?", args: [hashToken(token)] });
   const row = result.rows[0];
   if (!row || Number(row.expires_at) <= now) {
     if (row) await client.execute({ sql: "DELETE FROM sessions WHERE id = ?", args: [hashToken(token)] });
     return null;
   }
-  return { id: String(row.id), email: String(row.email) };
+  return { id: String(row.id), email: String(row.email), displayName: row.display_name === null ? null : String(row.display_name) };
 }
 
 export async function createSession(userId: string) {
@@ -180,7 +180,7 @@ export async function currentCollabUser(collabId: string, permission: CollabPerm
   const client = await db();
   const now = Date.now();
   const result = await client.execute({
-    sql: "SELECT users.id, users.email, sessions.expires_at, collabs.id AS collab_id, collabs.name AS collab_name, collab_memberships.role, collab_memberships.status FROM sessions JOIN users ON users.id = sessions.user_id LEFT JOIN collab_memberships ON collab_memberships.user_id = users.id AND collab_memberships.collab_id = ? LEFT JOIN collabs ON collabs.id = collab_memberships.collab_id WHERE sessions.id = ? LIMIT 1",
+    sql: "SELECT users.id, users.email, users.display_name, sessions.expires_at, collabs.id AS collab_id, collabs.name AS collab_name, collab_memberships.role, collab_memberships.status FROM sessions JOIN users ON users.id = sessions.user_id LEFT JOIN collab_memberships ON collab_memberships.user_id = users.id AND collab_memberships.collab_id = ? LEFT JOIN collabs ON collabs.id = collab_memberships.collab_id WHERE sessions.id = ? LIMIT 1",
     args: [collabId, hashToken(token)],
   });
   const row = result.rows[0];
@@ -192,5 +192,5 @@ export async function currentCollabUser(collabId: string, permission: CollabPerm
   if (String(row.status) !== "active") throw new CollabAccessError("COLLAB_MEMBERSHIP_INACTIVE", "Your access to this Collab has been deactivated.");
   const role = String(row.role) as CollabRole;
   if (!hasCollabPermission(role, permission)) throw new CollabAccessError("COLLAB_PERMISSION_DENIED", "Your role does not have permission to perform this action.");
-  return { id: String(row.id), email: String(row.email), collabId: String(row.collab_id), collabName: String(row.collab_name), role };
+  return { id: String(row.id), email: String(row.email), displayName: row.display_name === null ? null : String(row.display_name), collabId: String(row.collab_id), collabName: String(row.collab_name), role };
 }

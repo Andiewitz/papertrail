@@ -648,6 +648,37 @@ textarea { font-family: inherit; }
 .single-workspace-overview > a { flex: 0 0 auto; border-radius: 9px; padding: 11px 14px; color: #fff; background: #397d77; box-shadow: 0 8px 16px rgba(47, 99, 95, .19); font-size: .78rem; font-weight: 800; text-decoration: none; }
 .single-workspace-overview > a:hover { background: #306e69; }.single-workspace-overview > a span { margin-left: 4px; }
 
+.settings-backdrop { position: fixed; z-index: 40; inset: 0; display: flex; justify-content: flex-end; padding: 32px; background: rgba(43, 34, 29, .22); }
+.settings-panel { width: min(430px, 100%); height: 100%; overflow-y: auto; border: 1px solid rgba(221, 210, 202, .9); border-radius: 19px; padding: 25px; background: #fff; box-shadow: 0 24px 55px rgba(59, 40, 33, .24); }
+.settings-panel > header { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 20px; border-bottom: 1px solid var(--paper-line); }
+.settings-panel h2 { margin: 5px 0 0; color: #322d2a; font-size: 1.65rem; font-weight: 850; letter-spacing: -.045em; }
+.settings-panel > header button { width: 32px; height: 32px; border: 0; border-radius: 8px; color: #655b54; background: var(--paper-soft); font-size: 1.38rem; line-height: 1; }
+.settings-panel > header button:hover { color: #2e2926; background: #efe8e1; }
+.settings-panel > section { padding: 22px 0; border-bottom: 1px solid var(--paper-line); }
+.settings-panel > section:last-child { border-bottom: 0; }
+.settings-section-heading h3 { margin: 0; color: #393431; font-size: .92rem; font-weight: 850; }
+.settings-section-heading p { margin: 4px 0 14px; color: var(--paper-muted); font-size: .76rem; line-height: 1.45; }
+.settings-panel form { display: grid; gap: 12px; }
+.settings-panel label { display: grid; gap: 7px; color: #514942; font-size: .76rem; font-weight: 800; }
+.settings-panel input { width: 100%; border: 1px solid #d8cec6; border-radius: 9px; padding: 10px 11px; color: #393431; background: #fff; font: inherit; font-size: .85rem; outline: none; }
+.settings-panel input:focus { border-color: #4f8d87; box-shadow: 0 0 0 3px rgba(79, 141, 135, .14); }
+.settings-save { justify-self: start; border: 0; border-radius: 8px; padding: 10px 13px; color: #fff; background: #397d77; box-shadow: 0 6px 13px rgba(47, 99, 95, .17); font: inherit; font-size: .77rem; font-weight: 800; }
+.settings-save:hover:not(:disabled) { background: #306e69; }.settings-save:disabled { opacity: .62; cursor: wait; }
+.settings-error { margin: -2px 0 0; color: #a44239; font-size: .75rem; line-height: 1.4; }
+.settings-account output { display: block; overflow-wrap: anywhere; border-radius: 9px; padding: 10px 11px; color: #5a5049; background: var(--paper-soft); font-size: .82rem; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .dashboard-home-heading { animation: dashboard-enter .35s ease-out both; }
+  .single-workspace-overview { animation: dashboard-enter .38s .06s ease-out both; }
+  .dashboard-summary { animation: dashboard-enter .42s .12s ease-out both; }
+  .dashboard-summary-grid article { animation: dashboard-enter .32s ease-out both; }
+  .dashboard-summary-grid article:nth-child(1) { animation-delay: .17s; }
+  .dashboard-summary-grid article:nth-child(2) { animation-delay: .22s; }
+  .dashboard-summary-grid article:nth-child(3) { animation-delay: .27s; }
+  .dashboard-summary-grid article:nth-child(4) { animation-delay: .32s; }
+}
+@keyframes dashboard-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
 .dashboard-summary {
   max-width: 940px;
   margin-top: 50px;
@@ -710,6 +741,8 @@ textarea { font-family: inherit; }
   .collab-tile { min-height: 138px; padding: 14px; }
   .single-workspace-overview { display: block; margin-top: 30px; padding: 22px; }
   .single-workspace-overview > a { display: inline-block; margin-top: 18px; }
+  .settings-backdrop { padding: 12px; }
+  .settings-panel { border-radius: 15px; padding: 20px; }
   .dashboard-summary { margin-top: 37px; padding-top: 24px; }
   .dashboard-summary-heading { display: block; }
   .dashboard-live-status { display: inline-block; margin-top: 12px; }
