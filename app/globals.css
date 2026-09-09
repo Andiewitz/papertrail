@@ -391,6 +391,8 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .unified-dashboard .employee-copy small,
 .unified-dashboard .nav-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .unified-dashboard .time-nav { min-width: 0; }
+.sidebar-section-label { margin: 21px 9px 5px; color: #969089; font-size: .63rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.sidebar-collapsed .sidebar-section-label { overflow: hidden; height: 1px; margin: 17px 0 6px; color: transparent; }
 .unified-dashboard .time-icon { flex-shrink: 0; }
 .unified-dashboard .time-header h1 { font-size: clamp(1.4rem, 2.2vw, 1.8rem); overflow-wrap: anywhere; }
 .unified-dashboard .time-header > div:first-child { min-width: 0; }
@@ -425,3 +427,20 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
   .unified-dashboard .collab-create-row input { flex-basis: 100%; }
   .unified-dashboard .collab-tile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Workspace actions and overview. */
+.workspace-header { align-items: flex-start; padding-bottom: 26px; border-bottom: 1px solid #dedbd6; }
+.workspace-header .workspace-actions > button { min-height: 34px; padding: 7px 10px; box-shadow: none; }
+.collab-overview { display: grid; gap: 18px; max-width: 920px; }
+.collab-overview-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; border: 1px solid #dbe4e1; border-radius: 16px; padding: 28px; background: #e8f1ef; }
+.collab-overview-intro h2 { margin: 5px 0 8px; font-family: Georgia, serif; font-size: clamp(1.6rem, 3vw, 2.25rem); font-weight: 500; letter-spacing: -.04em; }
+.collab-overview-intro p:not(.section-kicker) { max-width: 520px; margin: 0; color: #61716e; font-size: .88rem; line-height: 1.55; }
+.collab-overview-intro .clock-button { flex: 0 0 auto; padding: 12px 15px; white-space: nowrap; }
+.collab-overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.collab-overview-grid article { display: grid; gap: 4px; border: 1px solid #e2dfda; border-radius: 13px; padding: 19px; background: #fff; box-shadow: 0 5px 14px rgba(69,66,60,.06); }
+.collab-overview-grid span { color: #397d77; font-family: Georgia, serif; font-size: 1.9rem; font-weight: 600; }
+.collab-overview-grid strong { color: #46413d; font-size: .82rem; }.collab-overview-grid small { color: #938b84; font-size: .72rem; }
+.workspace-team-card { border: 1px solid #e2dfda; border-radius: 13px; padding: 20px; background: #fff; box-shadow: 0 5px 14px rgba(69,66,60,.06); }
+.workspace-team-card header { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; padding-bottom: 13px; border-bottom: 1px solid #eeeae6; }.workspace-team-card h3 { margin: 0 0 4px; font-size: .95rem; }.workspace-team-card p { margin: 0; color: #908981; font-size: .76rem; }.workspace-team-card header button { border: 0; padding: 0; color: #397d77; background: transparent; font: inherit; font-size: .75rem; font-weight: 750; }.workspace-team-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0 18px; }.workspace-team-list .workspace-person { border-top: 0; }.workspace-empty { padding: 15px 0 0; }
+.workspace-panel { width: min(390px, calc(100vw - 44px)); }.workspace-invite-form { display: grid; gap: 15px; }.workspace-invite-form label { display: grid; gap: 7px; color: #635d57; font-size: .76rem; font-weight: 700; }.workspace-invite-form input, .workspace-invite-success input { width: 100%; border: 1px solid #dcd7d1; border-radius: 8px; padding: 10px; color: #4d4741; background: #fff; font: inherit; font-size: .8rem; outline: none; }.workspace-invite-form input:focus { border-color: #4f817b; box-shadow: 0 0 0 3px rgba(79,129,123,.12); }.workspace-invite-form p, .workspace-invite-success p { margin: -5px 0 0; color: #807972; font-size: .77rem; line-height: 1.5; }.workspace-invite-form .clock-button { justify-self: start; padding: 10px 13px; }.workspace-invite-success { display: grid; gap: 12px; }.workspace-invite-success > button:not(.workspace-link-button) { justify-self: start; border: 0; border-radius: 8px; padding: 10px 13px; color: #fff; background: #397d77; font: inherit; font-size: .78rem; font-weight: 750; }.workspace-link-button { justify-self: start; border: 0; padding: 2px 0; color: #397d77; background: transparent; font: inherit; font-size: .75rem; font-weight: 750; }
+@media (max-width: 720px) { .collab-overview-intro { display: grid; padding: 22px; }.collab-overview-intro .clock-button { justify-self: start; }.workspace-header { padding-bottom: 20px; }.collab-overview-grid { gap: 10px; } }

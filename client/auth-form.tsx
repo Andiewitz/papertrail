@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 type User = { id: string; email: string };
 type FieldErrors = Partial<Record<"email" | "password" | "confirmPassword" | "invitationToken" | "form", string>>;
@@ -44,6 +44,13 @@ export default function AuthForm({ onAuthenticated }: { onAuthenticated: (user: 
   const confirmationRef = useRef<HTMLInputElement>(null);
   const invitationRef = useRef<HTMLInputElement>(null);
   const signingUp = mode === "sign-up";
+
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("invite");
+    if (!token) return;
+    setMode("sign-up");
+    setInvitationToken(token);
+  }, []);
 
   function validate() {
     const next: FieldErrors = {};
@@ -112,7 +119,7 @@ export default function AuthForm({ onAuthenticated }: { onAuthenticated: (user: 
           <label>Email address<input aria-describedby={errors.email ? "email-error" : undefined} aria-invalid={Boolean(errors.email)} autoCapitalize="none" autoComplete="email" autoFocus inputMode="email" onChange={(event) => { setEmail(event.target.value); setErrors((current) => ({ ...current, email: undefined, form: undefined })); }} placeholder="you@example.com" ref={emailRef} spellCheck={false} type="email" value={email} />{errors.email && <span id="email-error" className="field-error">{errors.email}</span>}</label>
           <label>Password<div className="password-input"><input aria-describedby={errors.password ? "password-error" : undefined} aria-invalid={Boolean(errors.password)} autoComplete={signingUp ? "new-password" : "current-password"} minLength={signingUp ? 12 : undefined} onKeyDown={(event) => setCapsLock(event.getModifierState("CapsLock"))} onKeyUp={(event) => setCapsLock(event.getModifierState("CapsLock"))} onChange={(event) => { setPassword(event.target.value); setErrors((current) => ({ ...current, password: undefined, form: undefined })); }} placeholder={signingUp ? "At least 12 characters" : "Your password"} ref={passwordRef} type={showPassword ? "text" : "password"} value={password} /><button aria-label={showPassword ? "Hide password" : "Show password"} className="password-toggle" onClick={() => setShowPassword((shown) => !shown)} type="button"><EyeIcon open={showPassword} /></button></div>{capsLock && <span className="caps-warning">Caps Lock is on</span>}{errors.password && <span id="password-error" className="field-error">{errors.password}</span>}</label>
           {signingUp && <label>Confirm password<div className="password-input"><input aria-describedby={errors.confirmPassword ? "confirmation-error" : undefined} aria-invalid={Boolean(errors.confirmPassword)} autoComplete="new-password" minLength={12} onChange={(event) => { setConfirmPassword(event.target.value); setErrors((current) => ({ ...current, confirmPassword: undefined, form: undefined })); }} placeholder="Re-enter your password" ref={confirmationRef} type={showConfirmation ? "text" : "password"} value={confirmPassword} /><button aria-label={showConfirmation ? "Hide confirmation password" : "Show confirmation password"} className="password-toggle" onClick={() => setShowConfirmation((shown) => !shown)} type="button"><EyeIcon open={showConfirmation} /></button></div>{errors.confirmPassword && <span id="confirmation-error" className="field-error">{errors.confirmPassword}</span>}</label>}
-          {signingUp && <label>Invitation token <span className="auth-optional">Optional for the first workspace only</span><input aria-describedby={errors.invitationToken ? "invitation-error" : undefined} aria-invalid={Boolean(errors.invitationToken)} autoCapitalize="none" autoComplete="off" onChange={(event) => { setInvitationToken(event.target.value); setErrors((current) => ({ ...current, invitationToken: undefined, form: undefined })); }} placeholder="Paste your invitation token" ref={invitationRef} spellCheck={false} type="text" value={invitationToken} />{errors.invitationToken && <span id="invitation-error" className="field-error">{errors.invitationToken}</span>}</label>}
+          {signingUp && <label>Invitation token <span className="auth-optional">Optional for a personal account</span><input aria-describedby={errors.invitationToken ? "invitation-error" : undefined} aria-invalid={Boolean(errors.invitationToken)} autoCapitalize="none" autoComplete="off" onChange={(event) => { setInvitationToken(event.target.value); setErrors((current) => ({ ...current, invitationToken: undefined, form: undefined })); }} placeholder="Paste your invitation token" ref={invitationRef} spellCheck={false} type="text" value={invitationToken} />{errors.invitationToken && <span id="invitation-error" className="field-error">{errors.invitationToken}</span>}</label>}
           {signingUp && <div className="password-rules" aria-live="polite"><span className={password.length >= 12 ? "met" : ""}>✓ 12 or more characters</span><span className={confirmPassword.length > 0 && password === confirmPassword ? "met" : ""}>✓ Passwords match</span></div>}
           {errors.form && <p className="auth-error" role="alert">{errors.form}</p>}
           <button className="auth-submit" type="submit">{submitting ? <><i className="auth-spinner" />{signingUp ? "Creating account…" : "Signing in…"}</> : signingUp ? "Create account" : "Sign in"}</button>

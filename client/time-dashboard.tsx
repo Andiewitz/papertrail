@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { useDashboard } from "@/client/dashboard-shell";
@@ -46,10 +46,16 @@ export default function TimeDashboard({ collabId }: { collabId: string }) {
   const { collabs, loading: collabsLoading, requireSignIn } = useDashboard();
   const selectedCollab = collabs.find((collab) => collab.id === collabId);
   const canTrackTime = selectedCollab?.role === "member" || selectedCollab?.role === "co_admin";
+  const canInvite = selectedCollab?.role === "admin" || selectedCollab?.role === "co_admin";
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [membersOpen, setMembersOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [members, setMembers] = useState<{ id: string; email: string; role: string; status: string }[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteLink, setInviteLink] = useState("");
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -72,6 +78,19 @@ export default function TimeDashboard({ collabId }: { collabId: string }) {
 
   useEffect(() => { void loadEntries(); }, [loadEntries]);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30000); return () => window.clearInterval(timer); }, []);
+
+  const loadMembers = useCallback(async () => {
+    if (!selectedCollab) return;
+    setMembersLoading(true);
+    try {
+      const response = await fetch(`/api/collabs/${collabId}/members`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Members could not be loaded.");
+      setMembers(data.members);
+    } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Members could not be loaded." }); }
+    finally { setMembersLoading(false); }
+  }, [collabId, selectedCollab]);
+  useEffect(() => { void loadMembers(); }, [loadMembers]);
 
   const activeEntry = entries.find((entry) => entry.clockOut === null) ?? null;
   const activeBreak = activeEntry?.breaks.find((item) => item.endedAt === null) ?? null;
@@ -135,7 +154,23 @@ export default function TimeDashboard({ collabId }: { collabId: string }) {
     finally { setBusy(false); }
   }
 
-  async function openMembers() { setInboxOpen(false); setMembersOpen(true); try { const response = await fetch(`/api/collabs/${collabId}/members`); const data = await response.json(); if (!response.ok) throw new Error(data.error); setMembers(data.members); } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Members could not be loaded." }); } }
+  async function openMembers() { setInboxOpen(false); setInviteOpen(false); setMembersOpen(true); await loadMembers(); }
+  async function inviteMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setInviteBusy(true); setNotice(null); setInviteLink("");
+    try {
+      const response = await fetch(`/api/collabs/${collabId}/invitations`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: inviteEmail }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "The invitation could not be created.");
+      setInviteLink(`${window.location.origin}/?invite=${encodeURIComponent(data.invitation.token)}`);
+      setInviteEmail("");
+      setNotice({ type: "success", text: `Invitation created for ${data.invitation.email}.` });
+    } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "The invitation could not be created." }); }
+    finally { setInviteBusy(false); }
+  }
+  async function copyInvitation() {
+    try { await navigator.clipboard.writeText(inviteLink); setNotice({ type: "success", text: "Invitation link copied." }); }
+    catch { setNotice({ type: "error", text: "Copy failed. Select the link and copy it manually." }); }
+  }
 
   if (collabsLoading) return <p role="status">Loading Collab…</p>;
   if (!selectedCollab) return <section className="history-card"><h2>Collab unavailable</h2><p>You don’t have access to this Collab.</p><Link href="/">Back to dashboard</Link></section>;
@@ -143,14 +178,15 @@ export default function TimeDashboard({ collabId }: { collabId: string }) {
   const currentDate = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" }).format(new Date(now));
 
   return <>
-        <motion.header animate={{ opacity: 1, y: 0 }} className="time-header" initial={entrance} transition={{ duration: .42, ease: "easeOut" }}><div><p><Link href="/">Dashboard</Link> / Collab · {currentDate}</p><h1>{selectedCollab.name}</h1></div><div className="workspace-actions"><button onClick={() => void openMembers()} type="button">Members</button><button onClick={() => { setMembersOpen(false); setInboxOpen(true); }} type="button">Inbox</button>{canTrackTime && <div className="status-chip"><span className={activeEntry && !activeBreak ? "online" : "offline"} />{activeBreak ? "On break" : activeEntry ? "Clocked in" : "Clocked out"}</div>}</div></motion.header>
+        <motion.header animate={{ opacity: 1, y: 0 }} className="time-header workspace-header" initial={entrance} transition={{ duration: .42, ease: "easeOut" }}><div><p><Link href="/">Dashboard</Link> / Collab · {currentDate}</p><h1>{selectedCollab.name}</h1></div><div className="workspace-actions"><button onClick={() => void openMembers()} type="button">Members{membersLoading ? "…" : ` (${members.length})`}</button>{canInvite && <button onClick={() => { setMembersOpen(false); setInboxOpen(false); setInviteOpen(true); setInviteLink(""); }} type="button">Invite</button>}<button onClick={() => { setMembersOpen(false); setInviteOpen(false); setInboxOpen(true); }} type="button">Inbox</button>{canTrackTime && <div className="status-chip"><span className={activeEntry && !activeBreak ? "online" : "offline"} />{activeBreak ? "On break" : activeEntry ? "Clocked in" : "Clocked out"}</div>}</div></motion.header>
         <AnimatePresence mode="wait">{notice && <motion.div animate={{ opacity: 1, height: "auto" }} className={`time-notice ${notice.type}`} exit={{ opacity: 0, height: 0 }} initial={{ opacity: 0, height: 0 }} role={notice.type === "error" ? "alert" : "status"}><span>{notice.type === "success" ? <Icon name="check" /> : "!"}</span>{notice.text}<button aria-label="Dismiss" onClick={() => setNotice(null)} type="button">×</button></motion.div>}</AnimatePresence>
         {canTrackTime ? <>
         <motion.section animate={{ opacity: 1, y: 0 }} className="clock-card" initial={entrance} transition={{ duration: .45, delay: .08, ease: "easeOut" }}><div className="clock-card-copy"><p className="section-kicker">Today’s time</p><h2>{activeBreak ? "Your break is in progress" : activeEntry ? "Your shift is in progress" : "Ready when you are"}</h2><p>{activeEntry ? `Clocked in at ${new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(activeEntry.clockIn))}` : "Clock in when you begin work. Your current time is recorded automatically."}</p>{activeEntry && <strong>{toDuration((now - activeEntry.clockIn) - activeEntry.breaks.reduce((total, item) => total + ((item.endedAt ?? now) - item.startedAt), 0))} <small>paid this shift</small></strong>}</div><div className="clock-actions">{activeEntry && <motion.button whileTap={reduceMotion ? undefined : { scale: .98 }} className="clock-button break-button" disabled={busy} onClick={() => void updateBreak()} type="button">{busy ? "Updating…" : activeBreak ? "End break" : "Start break"}</motion.button>}<motion.button whileTap={reduceMotion ? undefined : { scale: .98 }} className={`clock-button ${activeEntry ? "clock-out" : "clock-in"}`} disabled={busy || loading || Boolean(activeBreak)} onClick={() => void updateClock()} type="button"><Icon name="clock" />{busy ? "Updating…" : activeEntry ? "Clock out" : "Clock in"}</motion.button></div></motion.section>
         <motion.section animate={{ opacity: 1, y: 0 }} className="time-metrics" initial={entrance} transition={{ duration: .45, delay: .15, ease: "easeOut" }} aria-label="Hours summary">{[["clock", "Today", toDuration(metrics.today), activeEntry ? "Currently working" : "No active shift"], ["calendar", "This week", toDuration(metrics.week), "Monday to today"], ["briefcase", "This month", toDuration(metrics.month), "All recorded shifts"]].map(([icon, label, total, caption], index) => <motion.article animate={{ opacity: 1, y: 0 }} initial={entrance} key={label} transition={{ duration: .35, delay: .2 + index * .07, ease: "easeOut" }}><span><Icon name={icon as "clock" | "calendar" | "briefcase"} /></span><p>{label}</p><strong>{total}</strong><small>{caption}</small></motion.article>)}</motion.section>
         <motion.section animate={{ opacity: 1, y: 0 }} className="history-card" id="history" initial={entrance} transition={{ duration: .45, delay: .34, ease: "easeOut" }}><div className="history-heading"><div><p className="section-kicker">Attendance</p><h2>Time history</h2><Link href={`/collabs/${collabId}/history`}>View all history</Link></div><button onClick={() => void loadEntries()} type="button">Refresh</button></div>{loading ? <div className="history-loading"><i /><i /><i /></div> : entries.length === 0 ? <div className="no-entries"><Icon name="calendar" /><h3>No time entries yet</h3><p>Your clock-ins and clock-outs will appear here.</p></div> : <div className="history-table" role="region" aria-label="Time history by day" tabIndex={0}>{historyDays.map((day) => <section className="history-day" key={day.key}><header><strong>{day.label}</strong><span>{toDuration(day.total)} paid</span></header><table><thead><tr><th>Clock in</th><th>Clock out</th><th>Paid time</th><th>Status</th></tr></thead><tbody>{day.entries.map((entry) => <tr key={entry.id}><td>{new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(entry.clockIn))}</td><td>{entry.clockOut ? new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(entry.clockOut)) : "—"}</td><td>{toDuration(paidDuration(entry, now))}</td><td><span className={entry.clockOut ? "entry-complete" : "entry-active"}>{entry.clockOut ? "Completed" : "In progress"}</span></td></tr>)}</tbody></table></section>)}</div>}</motion.section>
-        </> : <section className="history-card owner-collab"><p className="section-kicker">Admin workspace</p><h2>Your Collab</h2><p>View the people in {selectedCollab.name} using Members above.</p><p className="owner-collab-id">Collab ID <code>{selectedCollab.id}</code></p></section>}
+        </> : <section className="collab-overview"><div className="collab-overview-intro"><div><p className="section-kicker">Admin workspace</p><h2>Keep the team moving.</h2><p>Invite people, keep the directory current, and make this Collab ready for work.</p></div><button className="clock-button clock-in" onClick={() => { setMembersOpen(false); setInboxOpen(false); setInviteOpen(true); setInviteLink(""); }} type="button">Invite a member</button></div><div className="collab-overview-grid"><article><span>{members.length}</span><strong>{members.length === 1 ? "Member" : "Members"}</strong><small>{membersLoading ? "Updating directory…" : "Active people in this Collab"}</small></article><article><span>{members.filter((member) => member.role === "co_admin").length}</span><strong>Co-admins</strong><small>People who can help run the workspace</small></article></div><section className="workspace-team-card"><header><div><h3>People</h3><p>Everyone in {selectedCollab.name}.</p></div><button onClick={() => void openMembers()} type="button">Open directory</button></header>{membersLoading ? <p className="workspace-empty">Loading members…</p> : <div className="workspace-team-list">{members.slice(0, 4).map((member) => <div className="workspace-person" key={member.id}><span>{member.email[0].toUpperCase()}</span><div><strong>{member.email}</strong><small>{member.role.replace("_", "-")}</small></div></div>)}</div>}</section></section>}
         {membersOpen && <aside aria-label="Collab members" className="workspace-panel"><header><div><p className="section-kicker">People</p><h2>Members</h2></div><button aria-label="Close members" onClick={() => setMembersOpen(false)} type="button">×</button></header>{members.map((member) => <div className="workspace-person" key={member.id}><span>{member.email[0].toUpperCase()}</span><div><strong>{member.email}</strong><small>{member.role.replace("_", "-")}</small></div></div>)}</aside>}
+        {inviteOpen && <aside aria-label="Invite a member" className="workspace-panel"><header><div><p className="section-kicker">People</p><h2>Invite member</h2></div><button aria-label="Close invitation" onClick={() => setInviteOpen(false)} type="button">×</button></header>{inviteLink ? <div className="workspace-invite-success"><strong>Your invitation is ready.</strong><p>Share this private link with the person you invited. It expires in 7 days.</p><input aria-label="Invitation link" readOnly value={inviteLink} /><button onClick={() => void copyInvitation()} type="button">Copy invitation link</button><button className="workspace-link-button" onClick={() => { setInviteLink(""); setInviteEmail(""); }} type="button">Invite someone else</button></div> : <form className="workspace-invite-form" onSubmit={inviteMember}><label>Email address<input autoComplete="email" disabled={inviteBusy} onChange={(event) => setInviteEmail(event.target.value)} placeholder="teammate@example.com" required type="email" value={inviteEmail} /></label><p>They’ll join as a Member. You can promote them later if needed.</p><button className="clock-button clock-in" disabled={inviteBusy} type="submit">{inviteBusy ? "Creating…" : "Create invitation"}</button></form>}</aside>}
         {inboxOpen && <aside aria-label="Collab inbox" className="workspace-panel"><header><div><p className="section-kicker">Updates</p><h2>Inbox</h2></div><button aria-label="Close inbox" onClick={() => setInboxOpen(false)} type="button">×</button></header><div className="workspace-inbox-empty"><strong>You’re all caught up.</strong><p>Collab invitations, approvals, and timekeeping updates will appear here as they are added.</p></div></aside>}
   </>;
 }

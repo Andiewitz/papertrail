@@ -29,9 +29,9 @@ export function DashboardIcon({ name }: { name: "clock" | "home" | "panel" | "lo
   return <svg aria-hidden="true" className="time-icon" viewBox="0 0 24 24">{paths[name]}</svg>;
 }
 
-export default function DashboardShell({ children }: { children: ReactNode }) {
+export default function DashboardShell({ children, initialUser }: { children: ReactNode; initialUser: User | null }) {
   const pathname = usePathname();
-  const [user, setUser] = useState<User | null>();
+  const [user, setUser] = useState<User | null>(initialUser);
   const [collabs, setCollabs] = useState<Collab[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -48,12 +48,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Your Collabs could not be loaded."); }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => {
-    setCollapsed(localStorage.getItem("papertrail-sidebar") === "collapsed");
-    void fetch("/api/auth/session", { cache: "no-store" })
-      .then(async (response) => { if (!response.ok) throw new Error(); const data = await response.json(); setUser(data.user); })
-      .catch(() => setUser(null));
-  }, []);
+  useEffect(() => { setCollapsed(localStorage.getItem("papertrail-sidebar") === "collapsed"); }, []);
   useEffect(() => {
     setCollabs([]);
     if (user) void refreshCollabs();
@@ -68,7 +63,6 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
       setUser(null); setCollabs([]);
     } catch { setError("We couldn’t sign you out. Please try again."); }
   }
-  if (user === undefined) return <main className="time-loading"><p>Loading Papertrail…</p></main>;
   if (!user) return <AuthForm onAuthenticated={setUser} />;
   const name = user.email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   return <Context.Provider value={{ user, collabs, loading, error, refreshCollabs, addCollab: (collab) => setCollabs((current) => [...current, collab]), requireSignIn }}>
@@ -79,6 +73,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
           <div className="employee-summary"><span>{user.email[0].toUpperCase()}</span><div className="employee-copy"><strong>{name}</strong><small title={user.email}>{user.email}</small></div></div>
           <nav aria-label="Main navigation">
             <Link className={`time-nav${pathname === "/" ? " active" : ""}`} href="/" title="Dashboard" aria-current={pathname === "/" ? "page" : undefined}><DashboardIcon name="home" /><span className="nav-label">Dashboard</span></Link>
+            {collabs.length > 0 && <p className="sidebar-section-label">Your Collabs</p>}
             {collabs.map((collab) => <Link className={`time-nav${pathname.startsWith(`/collabs/${collab.id}`) ? " active" : ""}`} href={`/collabs/${collab.id}`} key={collab.id} title={collab.name} aria-current={pathname === `/collabs/${collab.id}` ? "page" : undefined}><DashboardIcon name="collab" /><span className="nav-label">{collab.name}</span></Link>)}
           </nav>
           <div className="time-sidebar-footer"><p><DashboardIcon name="clock" /><span className="sidebar-security">Your people. Your workspace.</span></p><button onClick={() => void signOut()} title="Sign out" type="button"><DashboardIcon name="logout" /><span className="logout-label">Sign out</span></button></div>
