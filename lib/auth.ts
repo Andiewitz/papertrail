@@ -14,6 +14,7 @@ const PASSWORD_KEY_LENGTH = 64;
 
 export type SessionUser = { id: string; email: string; displayName: string | null };
 export type SessionCollabUser = SessionUser & { collabId: string; collabName: string; role: CollabRole };
+export type SessionWorkspace = { id: string; name: string; role: CollabRole };
 
 const credentialsSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
@@ -145,7 +146,6 @@ export async function enforceRateLimit(request: Request, scope: string, maxAttem
   const now = Date.now();
   const resetAt = now + windowMs;
   const client = await db();
-  await client.execute({ sql: "DELETE FROM rate_limits WHERE reset_at < ?", args: [now] });
   const result = await client.execute({
     sql: "INSERT INTO rate_limits (key, count, reset_at) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET count = CASE WHEN rate_limits.reset_at <= ? THEN 1 ELSE rate_limits.count + 1 END, reset_at = CASE WHEN rate_limits.reset_at <= ? THEN excluded.reset_at ELSE rate_limits.reset_at END RETURNING count, reset_at",
     args: [key, resetAt, now, now],
@@ -172,6 +172,25 @@ export function authFailure(error: unknown, fallbackCode: string) {
     return { code: "AUTH_DATABASE_UNAVAILABLE", error: "The app could not reach the Turso database." };
   }
   return { code: fallbackCode, error: "Authentication is temporarily unavailable. Please try again." };
+}
+
+export async function currentUserWorkspace(): Promise<{ user: SessionUser; workspace: SessionWorkspace | null } | null> {
+  const token = (await cookies()).get(COOKIE_NAME)?.value;
+  if (!token) return null;
+  const client = await db();
+  const now = Date.now();
+  const result = await client.execute({
+    sql: "SELECT users.id, users.email, users.display_name, sessions.expires_at, collabs.id AS collab_id, collabs.name AS collab_name, collab_memberships.role FROM sessions JOIN users ON users.id = sessions.user_id LEFT JOIN collab_memberships ON collab_memberships.user_id = users.id AND collab_memberships.status = 'active' LEFT JOIN collabs ON collabs.id = collab_memberships.collab_id WHERE sessions.id = ? ORDER BY collabs.created_at ASC LIMIT 1",
+    args: [hashToken(token)],
+  });
+  const row = result.rows[0];
+  if (!row || Number(row.expires_at) <= now) {
+    if (row) await client.execute({ sql: "DELETE FROM sessions WHERE id = ?", args: [hashToken(token)] });
+    return null;
+  }
+  const user = { id: String(row.id), email: String(row.email), displayName: row.display_name === null ? null : String(row.display_name) };
+  const workspace = row.collab_id === null ? null : { id: String(row.collab_id), name: String(row.collab_name), role: String(row.role) as CollabRole };
+  return { user, workspace };
 }
 
 export async function currentCollabUser(collabId: string, permission: CollabPermission): Promise<SessionCollabUser | null> {

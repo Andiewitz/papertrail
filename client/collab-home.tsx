@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import { useDashboard } from "@/client/dashboard-shell";
 
@@ -8,44 +8,18 @@ function displayName(email: string) {
   return email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-type DashboardStats = {
-  averageDailyMs: number;
-  daysWorked: number;
-  lastSevenDaysMs: number;
-  completedShifts: number;
-  activeEntry: { collabName: string; clockIn: number } | null;
-};
-
 function formatDuration(milliseconds: number) {
   const minutes = Math.max(0, Math.floor(milliseconds / 60000));
   return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
 }
 
 export default function CollabHome() {
-  const { user, collabs, loading, requireSignIn } = useDashboard();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [statsError, setStatsError] = useState("");
+  const { user, collabs, loading, dashboardStats: stats, dashboardStatsError: statsError, dashboardStatsLoading: statsLoading, loadDashboardStats } = useDashboard();
   const workspace = collabs[0];
 
   useEffect(() => {
-    const controller = new AbortController();
-    async function loadStats() {
-      setStatsError("");
-      try {
-        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const response = await fetch(`/api/dashboard?timeZone=${encodeURIComponent(timeZone)}`, { cache: "no-store", signal: controller.signal });
-        const data = await response.json();
-        if (response.status === 401) { requireSignIn(); return; }
-        if (!response.ok) throw new Error(data.error ?? "Your work snapshot could not be loaded.");
-        setStats(data);
-      } catch (caught) {
-        if (caught instanceof DOMException && caught.name === "AbortError") return;
-        setStatsError(caught instanceof Error ? caught.message : "Your work snapshot could not be loaded.");
-      }
-    }
-    void loadStats();
-    return () => controller.abort();
-  }, [requireSignIn]);
+    if (workspace) void loadDashboardStats(workspace.id);
+  }, [loadDashboardStats, workspace]);
 
   return <>
     <header className="time-header dashboard-home-heading"><div><p>Dashboard</p><h1>Good to see you, {(user.displayName ?? displayName(user.email)).split(" ")[0]}.</h1></div></header>
@@ -55,7 +29,7 @@ export default function CollabHome() {
     </section>
     <section aria-labelledby="work-snapshot-title" className="dashboard-summary">
       <div className="dashboard-summary-heading"><div><p className="section-kicker">Your activity</p><h2 id="work-snapshot-title">Work snapshot</h2><p>Your personal time, from the last 28 days.</p></div>{stats?.activeEntry && <span className="dashboard-live-status">Clocked in · {stats.activeEntry.collabName}</span>}</div>
-      {statsError ? <p className="dashboard-summary-error" role="alert">{statsError}</p> : !stats ? <div aria-label="Loading your work snapshot" className="dashboard-summary-grid dashboard-summary-loading"><i /><i /><i /><i /></div> : <div className="dashboard-summary-grid">
+      {statsError ? <p className="dashboard-summary-error" role="alert">{statsError}</p> : !stats || statsLoading ? <div aria-label="Loading your work snapshot" className="dashboard-summary-grid dashboard-summary-loading"><i /><i /><i /><i /></div> : <div className="dashboard-summary-grid">
         <article><span>Average workday</span><strong>{stats.daysWorked ? formatDuration(stats.averageDailyMs) : "—"}</strong><small>{stats.daysWorked ? `Across ${stats.daysWorked} logged ${stats.daysWorked === 1 ? "day" : "days"}` : "Start tracking time to see this"}</small></article>
         <article><span>Last 7 days</span><strong>{formatDuration(stats.lastSevenDaysMs)}</strong><small>Paid time recorded this week</small></article>
         <article><span>Completed shifts</span><strong>{stats.completedShifts}</strong><small>Finished in the last 28 days</small></article>

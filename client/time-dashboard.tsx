@@ -46,7 +46,7 @@ function startOfWeek(date: Date) {
 function memberName(member: Member) { return member.displayName ?? member.email; }
 
 export default function TimeDashboard({ collabId }: { collabId: string }) {
-  const { collabs, loading: collabsLoading, requireSignIn } = useDashboard();
+  const { collabs, loading: collabsLoading, requireSignIn, invalidateDashboardStats } = useDashboard();
   const selectedCollab = collabs.find((collab) => collab.id === collabId);
   const canTrackTime = selectedCollab?.role === "member" || selectedCollab?.role === "co_admin";
   const canInvite = selectedCollab?.role === "admin" || selectedCollab?.role === "co_admin";
@@ -55,6 +55,7 @@ export default function TimeDashboard({ collabId }: { collabId: string }) {
   const [inboxOpen, setInboxOpen] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
+  const [membersLoaded, setMembersLoaded] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteBusy, setInviteBusy] = useState(false);
@@ -90,10 +91,11 @@ export default function TimeDashboard({ collabId }: { collabId: string }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Members could not be loaded.");
       setMembers(data.members);
+      setMembersLoaded(true);
     } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Members could not be loaded." }); }
     finally { setMembersLoading(false); }
   }, [collabId, selectedCollab]);
-  useEffect(() => { void loadMembers(); }, [loadMembers]);
+  useEffect(() => { if (selectedCollab?.role === "admin") void loadMembers(); }, [loadMembers, selectedCollab?.role]);
 
   const activeEntry = entries.find((entry) => entry.clockOut === null) ?? null;
   const activeBreak = activeEntry?.breaks.find((item) => item.endedAt === null) ?? null;
@@ -137,6 +139,7 @@ export default function TimeDashboard({ collabId }: { collabId: string }) {
         const withoutUpdatedEntry = current.filter((entry) => entry.id !== data.entry.id);
         return action === "clock-in" ? [data.entry, ...withoutUpdatedEntry] : [...withoutUpdatedEntry, data.entry].sort((left, right) => right.clockIn - left.clockIn);
       });
+      invalidateDashboardStats();
       setNow(Date.now());
       setNotice({ type: "success", text: action === "clock-in" ? data.alreadyClockedIn ? "Your active shift is already recorded." : "You’re clocked in. Have a great shift." : data.alreadyClockedOut ? "Your clock-out was already recorded." : "You’re clocked out. Your hours have been recorded." });
     } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Your time entry could not be updated." }); }
@@ -151,13 +154,14 @@ export default function TimeDashboard({ collabId }: { collabId: string }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Your break could not be updated.");
       setEntries((current) => current.map((item) => item.id === data.entry.id ? data.entry : item));
+      invalidateDashboardStats();
       setNow(Date.now());
       setNotice({ type: "success", text: activeBreak ? "Your break has ended. You’re back on the clock." : "Your break has started. Paid time is paused." });
     } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Your break could not be updated." }); }
     finally { setBusy(false); }
   }
 
-  async function openMembers() { setInboxOpen(false); setInviteOpen(false); setMembersOpen(true); await loadMembers(); }
+  async function openMembers() { setInboxOpen(false); setInviteOpen(false); setMembersOpen(true); if (!membersLoaded) await loadMembers(); }
   async function inviteMember(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setInviteBusy(true); setNotice(null); setInviteLink("");
     try {
@@ -181,7 +185,7 @@ export default function TimeDashboard({ collabId }: { collabId: string }) {
   const currentDate = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" }).format(new Date(now));
 
   return <>
-        <motion.header animate={{ opacity: 1, y: 0 }} className="time-header workspace-header" initial={entrance} transition={{ duration: .42, ease: "easeOut" }}><div><p><Link href="/">Dashboard</Link> / Collab · {currentDate}</p><h1>{selectedCollab.name}</h1></div><div className="workspace-actions"><button onClick={() => void openMembers()} type="button">Members{membersLoading ? "…" : ` (${members.length})`}</button>{canInvite && <button onClick={() => { setMembersOpen(false); setInboxOpen(false); setInviteOpen(true); setInviteLink(""); }} type="button">Invite</button>}<button onClick={() => { setMembersOpen(false); setInviteOpen(false); setInboxOpen(true); }} type="button">Inbox</button>{canTrackTime && <div className="status-chip"><span className={activeEntry && !activeBreak ? "online" : "offline"} />{activeBreak ? "On break" : activeEntry ? "Clocked in" : "Clocked out"}</div>}</div></motion.header>
+        <motion.header animate={{ opacity: 1, y: 0 }} className="time-header workspace-header" initial={entrance} transition={{ duration: .42, ease: "easeOut" }}><div><p><Link href="/">Dashboard</Link> / Collab · {currentDate}</p><h1>{selectedCollab.name}</h1></div><div className="workspace-actions"><button onClick={() => void openMembers()} type="button">Members{membersLoading ? "…" : membersLoaded ? ` (${members.length})` : ""}</button>{canInvite && <button onClick={() => { setMembersOpen(false); setInboxOpen(false); setInviteOpen(true); setInviteLink(""); }} type="button">Invite</button>}<button onClick={() => { setMembersOpen(false); setInviteOpen(false); setInboxOpen(true); }} type="button">Inbox</button>{canTrackTime && <div className="status-chip"><span className={activeEntry && !activeBreak ? "online" : "offline"} />{activeBreak ? "On break" : activeEntry ? "Clocked in" : "Clocked out"}</div>}</div></motion.header>
         <AnimatePresence mode="wait">{notice && <motion.div animate={{ opacity: 1, height: "auto" }} className={`time-notice ${notice.type}`} exit={{ opacity: 0, height: 0 }} initial={{ opacity: 0, height: 0 }} role={notice.type === "error" ? "alert" : "status"}><span>{notice.type === "success" ? <Icon name="check" /> : "!"}</span>{notice.text}<button aria-label="Dismiss" onClick={() => setNotice(null)} type="button">×</button></motion.div>}</AnimatePresence>
         {canTrackTime ? <>
         <motion.section animate={{ opacity: 1, y: 0 }} className="clock-card" initial={entrance} transition={{ duration: .45, delay: .08, ease: "easeOut" }}><div className="clock-card-copy"><p className="section-kicker">Today’s time</p><h2>{activeBreak ? "Your break is in progress" : activeEntry ? "Your shift is in progress" : "Ready when you are"}</h2><p>{activeEntry ? `Clocked in at ${new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(activeEntry.clockIn))}` : "Clock in when you begin work. Your current time is recorded automatically."}</p>{activeEntry && <strong>{toDuration((now - activeEntry.clockIn) - activeEntry.breaks.reduce((total, item) => total + ((item.endedAt ?? now) - item.startedAt), 0))} <small>paid this shift</small></strong>}</div><div className="clock-actions">{activeEntry && <motion.button whileTap={reduceMotion ? undefined : { scale: .98 }} className="clock-button break-button" disabled={busy} onClick={() => void updateBreak()} type="button">{busy ? "Updating…" : activeBreak ? "End break" : "Start break"}</motion.button>}<motion.button whileTap={reduceMotion ? undefined : { scale: .98 }} className={`clock-button ${activeEntry ? "clock-out" : "clock-in"}`} disabled={busy || loading || Boolean(activeBreak)} onClick={() => void updateClock()} type="button"><Icon name="clock" />{busy ? "Updating…" : activeEntry ? "Clock out" : "Clock in"}</motion.button></div></motion.section>

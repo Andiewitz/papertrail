@@ -1,9 +1,10 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AuthForm from "@/client/auth-form";
+import type { DashboardStats } from "@/lib/dashboard";
 
 type User = { id: string; email: string; displayName: string | null };
 export type Collab = { id: string; name: string; role: "admin" | "co_admin" | "member" };
@@ -13,8 +14,14 @@ type DashboardContext = {
   requireSignIn: () => void;
   updateUser: (user: User) => void;
   updateWorkspaceName: (name: string) => void;
+  dashboardStats: DashboardStats | null;
+  dashboardStatsError: string;
+  dashboardStatsLoading: boolean;
+  loadDashboardStats: (workspaceId: string) => Promise<void>;
+  invalidateDashboardStats: () => void;
 };
 const Context = createContext<DashboardContext | null>(null);
+const STATS_CACHE_MS = 60_000;
 export function useDashboard() {
   const context = useContext(Context);
   if (!context) throw new Error("Dashboard content must be inside DashboardShell.");
@@ -40,6 +47,11 @@ export default function DashboardShell({ children, initialCollabs, initialUser }
   const [usingServerCollabs, setUsingServerCollabs] = useState(initialUser !== null && initialCollabs !== null);
   const [error, setError] = useState("");
   const [collapsed, setCollapsed] = useState(false);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+  const [dashboardStatsError, setDashboardStatsError] = useState("");
+  const [dashboardStatsLoading, setDashboardStatsLoading] = useState(false);
+  const dashboardStatsCache = useRef<{ workspaceId: string; value: DashboardStats; fetchedAt: number } | null>(null);
+  const dashboardStatsRequest = useRef<Promise<void> | null>(null);
   const requireSignIn = useCallback(() => { setUsingServerCollabs(false); setUser(null); }, []);
   const refreshCollabs = useCallback(async () => {
     setLoading(true); setError("");
@@ -58,9 +70,43 @@ export default function DashboardShell({ children, initialCollabs, initialUser }
     if (usingServerCollabs) return;
     void refreshCollabs();
   }, [refreshCollabs, user, usingServerCollabs]);
+  useEffect(() => {
+    dashboardStatsCache.current = null;
+    dashboardStatsRequest.current = null;
+    setDashboardStats(null);
+    setDashboardStatsError("");
+    setDashboardStatsLoading(false);
+  }, [user?.id]);
   function toggleSidebar() {
     setCollapsed((current) => { localStorage.setItem("papertrail-sidebar", current ? "expanded" : "collapsed"); return !current; });
   }
+  const invalidateDashboardStats = useCallback(() => {
+    dashboardStatsCache.current = null;
+    setDashboardStats(null);
+  }, []);
+  const loadDashboardStats = useCallback(async (workspaceId: string) => {
+    const cached = dashboardStatsCache.current;
+    if (cached?.workspaceId === workspaceId && Date.now() - cached.fetchedAt < STATS_CACHE_MS) {
+      setDashboardStats(cached.value);
+      return;
+    }
+    if (dashboardStatsRequest.current) return dashboardStatsRequest.current;
+    const request = (async () => {
+      setDashboardStatsLoading(true); setDashboardStatsError("");
+      try {
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const response = await fetch(`/api/dashboard?collabId=${encodeURIComponent(workspaceId)}&timeZone=${encodeURIComponent(timeZone)}`, { cache: "no-store" });
+        const data = await response.json();
+        if (response.status === 401) { requireSignIn(); return; }
+        if (!response.ok) throw new Error(data.error ?? "Your work snapshot could not be loaded.");
+        dashboardStatsCache.current = { workspaceId, value: data, fetchedAt: Date.now() };
+        setDashboardStats(data);
+      } catch (caught) { setDashboardStatsError(caught instanceof Error ? caught.message : "Your work snapshot could not be loaded."); }
+      finally { setDashboardStatsLoading(false); dashboardStatsRequest.current = null; }
+    })();
+    dashboardStatsRequest.current = request;
+    return request;
+  }, [requireSignIn]);
   async function signOut() {
     try {
       const response = await fetch("/api/auth/sign-out", { method: "POST" });
@@ -72,7 +118,7 @@ export default function DashboardShell({ children, initialCollabs, initialUser }
   const name = user.displayName ?? user.email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   const workspace = collabs[0];
   const updateWorkspaceName = (name: string) => setCollabs((current) => current.map((collab) => collab.id === workspace?.id ? { ...collab, name } : collab));
-  return <Context.Provider value={{ user, collabs, loading, error, refreshCollabs, requireSignIn, updateUser: setUser, updateWorkspaceName }}>
+  return <Context.Provider value={{ user, collabs, loading, error, refreshCollabs, requireSignIn, updateUser: setUser, updateWorkspaceName, dashboardStats, dashboardStatsError, dashboardStatsLoading, loadDashboardStats, invalidateDashboardStats }}>
     <main className="time-app unified-dashboard">
       <div className={`time-shell${collapsed ? " sidebar-collapsed" : ""}`}>
         <aside className="time-sidebar">

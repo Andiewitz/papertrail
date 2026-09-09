@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "db:migrate": "node scripts/migrate.mjs",
     "db:status": "node scripts/migrate.mjs --status",
+    "db:prune-rate-limits": "node scripts/prune-rate-limits.mjs",
     "build:vercel": "npm run db:migrate && npm run build",
     "test:integration": "node scripts/integration-test.mjs",
     "verify": "npm run lint && npm run typecheck && npm run build && npm run test:integration"

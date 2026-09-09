@@ -3,11 +3,13 @@ import { db } from "@/lib/db";
 import { logError } from "@/lib/log";
 import { NextResponse } from "next/server";
 import type { Row } from "@libsql/client";
+import { z } from "zod";
 
 export const runtime = "nodejs";
 
 const LOOKBACK_DAYS = 28;
 const DAY_MS = 1000 * 60 * 60 * 24;
+const collabIdSchema = z.string().uuid();
 
 type Entry = { clockIn: number; clockOut: number | null; breakMs: number; collabName: string };
 
@@ -41,11 +43,18 @@ export async function GET(request: Request) {
   try {
     const user = await currentUser();
     if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    const collabId = collabIdSchema.safeParse(new URL(request.url).searchParams.get("collabId"));
+    if (!collabId.success) return NextResponse.json({ error: "Choose a valid workspace." }, { status: 400 });
 
     const now = Date.now();
     const since = now - LOOKBACK_DAYS * DAY_MS;
     const result = await (await db()).execute({
-      sql: `SELECT time_entries.clock_in, time_entries.clock_out, collabs.name AS collab_name,
+      sql: `WITH included_entries AS (
+              SELECT id FROM time_entries WHERE user_id = ? AND collab_id = ? AND clock_out IS NULL
+              UNION
+              SELECT id FROM time_entries WHERE user_id = ? AND collab_id = ? AND clock_out IS NOT NULL AND clock_in >= ?
+            )
+            SELECT time_entries.clock_in, time_entries.clock_out, collabs.name AS collab_name,
               COALESCE(SUM(CASE
                 WHEN break_entries.id IS NULL THEN 0
                 WHEN break_entries.ended_at IS NULL THEN ? - break_entries.started_at
@@ -54,10 +63,10 @@ export async function GET(request: Request) {
             FROM time_entries
             JOIN collabs ON collabs.id = time_entries.collab_id
             LEFT JOIN break_entries ON break_entries.time_entry_id = time_entries.id
-            WHERE time_entries.user_id = ? AND (time_entries.clock_out IS NULL OR time_entries.clock_in >= ?)
+            WHERE time_entries.id IN included_entries
             GROUP BY time_entries.id
             ORDER BY time_entries.clock_in DESC`,
-      args: [now, user.id, since],
+      args: [user.id, collabId.data, user.id, collabId.data, since, now],
     });
     const timeZone = requestedTimeZone(request);
     const entries = result.rows.map(toEntry);
