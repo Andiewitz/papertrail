@@ -9,7 +9,7 @@ type User = { id: string; email: string };
 export type Collab = { id: string; name: string; role: "admin" | "co_admin" | "member" };
 type DashboardContext = {
   user: User; collabs: Collab[]; loading: boolean; error: string;
-  refreshCollabs: () => Promise<void>; addCollab: (collab: Collab) => void;
+  refreshCollabs: () => Promise<void>;
   requireSignIn: () => void;
 };
 const Context = createContext<DashboardContext | null>(null);
@@ -65,7 +65,8 @@ export default function DashboardShell({ children, initialUser }: { children: Re
   }
   if (!user) return <AuthForm onAuthenticated={setUser} />;
   const name = user.email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-  return <Context.Provider value={{ user, collabs, loading, error, refreshCollabs, addCollab: (collab) => setCollabs((current) => [...current, collab]), requireSignIn }}>
+  const workspace = collabs[0];
+  return <Context.Provider value={{ user, collabs, loading, error, refreshCollabs, requireSignIn }}>
     <main className="time-app unified-dashboard">
       <div className={`time-shell${collapsed ? " sidebar-collapsed" : ""}`}>
         <aside className="time-sidebar">
@@ -73,8 +74,7 @@ export default function DashboardShell({ children, initialUser }: { children: Re
           <div className="employee-summary"><span>{user.email[0].toUpperCase()}</span><div className="employee-copy"><strong>{name}</strong><small title={user.email}>{user.email}</small></div></div>
           <nav aria-label="Main navigation">
             <Link className={`time-nav${pathname === "/" ? " active" : ""}`} href="/" title="Dashboard" aria-current={pathname === "/" ? "page" : undefined}><DashboardIcon name="home" /><span className="nav-label">Dashboard</span></Link>
-            {collabs.length > 0 && <p className="sidebar-section-label">Your Collabs</p>}
-            {collabs.map((collab) => <Link className={`time-nav${pathname.startsWith(`/collabs/${collab.id}`) ? " active" : ""}`} href={`/collabs/${collab.id}`} key={collab.id} title={collab.name} aria-current={pathname === `/collabs/${collab.id}` ? "page" : undefined}><DashboardIcon name="collab" /><span className="nav-label">{collab.name}</span></Link>)}
+            {workspace && <Link className={`time-nav${pathname.startsWith(`/collabs/${workspace.id}`) ? " active" : ""}`} href={`/collabs/${workspace.id}`} title="Workspace" aria-current={pathname === `/collabs/${workspace.id}` ? "page" : undefined}><DashboardIcon name="collab" /><span className="nav-label">Workspace</span></Link>}
           </nav>
           <div className="time-sidebar-footer"><p><DashboardIcon name="clock" /><span className="sidebar-security">Your people. Your workspace.</span></p><button onClick={() => void signOut()} title="Sign out" type="button"><DashboardIcon name="logout" /><span className="logout-label">Sign out</span></button></div>
         </aside>

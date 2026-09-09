@@ -94,9 +94,11 @@ try {
   const ownerCookie = ownerCookieHeader.split(";", 1)[0];
   const ownerHeaders = { cookie: ownerCookie, origin, "content-type": "application/json", "x-forwarded-for": "203.0.113.11" };
   const initialCollabs = await json(await fetch(`${baseUrl}/api/collabs`, { headers: ownerHeaders }), 200, "new account Collabs");
-  assert.deepEqual(initialCollabs.collabs, [], "ordinary registration must not create a default Collab");
-  const createdCollab = await json(await fetch(`${baseUrl}/api/collabs`, { method: "POST", headers: ownerHeaders, body: JSON.stringify({ name: "Integration Collab" }) }), 201, "collab creation");
-  const collabId = createdCollab.collab.id;
+  assert.equal(initialCollabs.collabs.length, 1, "ordinary registration should create one workspace");
+  assert.equal(initialCollabs.collabs[0].name, "My team");
+  assert.equal(initialCollabs.collabs[0].role, "admin");
+  const collabId = initialCollabs.collabs[0].id;
+  await json(await fetch(`${baseUrl}/api/collabs`, { method: "POST", headers: ownerHeaders, body: JSON.stringify({ name: "Another workspace" }) }), 405, "workspace creation is disabled");
   const employeeTimeUrl = `${baseUrl}/api/collabs/${collabId}/time`;
   for (const action of ["clock-in", "clock-out", "break-start", "break-end"]) {
     await json(await fetch(employeeTimeUrl, { method: "POST", headers: ownerHeaders, body: JSON.stringify({ action }) }), 403, `owner cannot ${action}`);
@@ -217,7 +219,7 @@ try {
   const afterSignOut = await json(await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: ownerCookie } }), 200, "signed-out session");
   assert.equal(afterSignOut.user, null);
 
-  console.log("Integration flow passed: no default Collab, explicit creation, owner timekeeping denied, member/co-admin timekeeping, invitations, deactivation, auth, idempotency, history, origin protection, and sign-out.");
+  console.log("Integration flow passed: automatic workspace creation, owner timekeeping denied, member/co-admin timekeeping, invitations, deactivation, auth, idempotency, history, origin protection, and sign-out.");
 } finally {
   server.kill("SIGTERM");
   await Promise.race([once(server, "exit"), new Promise((resolve) => setTimeout(resolve, 5_000))]);

@@ -1,7 +1,7 @@
 import { assertSameOrigin, authFailure, createSession, enforceRateLimit, hashPassword, newUserId, setSessionCookie, signUpCredentialsSchema } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logError } from "@/lib/log";
-import { acceptCollabInvitation, CollabAccessError } from "@/lib/collab";
+import { acceptCollabInvitation, CollabAccessError, createCollab } from "@/lib/collab";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -18,9 +18,13 @@ export async function POST(request: Request) {
     if (existing.rows.length) return NextResponse.json({ error: "An account with that email already exists.", code: "AUTH_EMAIL_EXISTS" }, { status: 409 });
     const user = { id: newUserId(), email: input.data.email, passwordHash: await hashPassword(input.data.password) };
     await client.execute({ sql: "INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)", args: [user.id, user.email, user.passwordHash, Date.now()] });
-    if (input.data.invitationToken) {
-      try { await acceptCollabInvitation(user.id, user.email, input.data.invitationToken); }
-      catch (error) { await client.execute({ sql: "DELETE FROM users WHERE id = ?", args: [user.id] }); throw error; }
+    try {
+      if (input.data.invitationToken) await acceptCollabInvitation(user.id, user.email, input.data.invitationToken);
+      else await createCollab(user.id, "My team");
+    } catch (error) {
+      await client.execute({ sql: "DELETE FROM collabs WHERE created_by_user_id = ?", args: [user.id] });
+      await client.execute({ sql: "DELETE FROM users WHERE id = ?", args: [user.id] });
+      throw error;
     }
     const response = NextResponse.json({ user: { id: user.id, email: user.email } }, { status: 201 });
     setSessionCookie(response, await createSession(user.id));

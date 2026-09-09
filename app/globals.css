@@ -642,6 +642,12 @@ textarea { font-family: inherit; }
 .collab-tile-create { border-color: #d9e8e5; background: #fbfdfc; box-shadow: none; }
 .collab-tile-create .collab-tile-icon { color: #4f8c86; background: #e5f2ef; }
 
+.single-workspace-overview { display: flex; max-width: 940px; align-items: flex-end; justify-content: space-between; gap: 24px; margin-top: 39px; border: 1px solid #d8e8e4; border-radius: 17px; padding: 27px 29px; background: var(--paper-mint); }
+.single-workspace-overview h2 { margin: 5px 0 7px; color: #315d5a; font-size: clamp(1.35rem, 2.3vw, 1.85rem); font-weight: 850; letter-spacing: -.045em; }
+.single-workspace-overview p:not(.section-kicker) { max-width: 540px; margin: 0; color: #59716e; font-size: .83rem; line-height: 1.55; }
+.single-workspace-overview > a { flex: 0 0 auto; border-radius: 9px; padding: 11px 14px; color: #fff; background: #397d77; box-shadow: 0 8px 16px rgba(47, 99, 95, .19); font-size: .78rem; font-weight: 800; text-decoration: none; }
+.single-workspace-overview > a:hover { background: #306e69; }.single-workspace-overview > a span { margin-left: 4px; }
+
 .dashboard-summary {
   max-width: 940px;
   margin-top: 50px;
@@ -702,6 +708,8 @@ textarea { font-family: inherit; }
   .time-header h1 { font-size: 2rem; }
   .collab-tile-grid { gap: 11px; }
   .collab-tile { min-height: 138px; padding: 14px; }
+  .single-workspace-overview { display: block; margin-top: 30px; padding: 22px; }
+  .single-workspace-overview > a { display: inline-block; margin-top: 18px; }
   .dashboard-summary { margin-top: 37px; padding-top: 24px; }
   .dashboard-summary-heading { display: block; }
   .dashboard-live-status { display: inline-block; margin-top: 12px; }
