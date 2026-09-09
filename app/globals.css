@@ -444,3 +444,238 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .workspace-team-card header { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; padding-bottom: 13px; border-bottom: 1px solid #eeeae6; }.workspace-team-card h3 { margin: 0 0 4px; font-size: .95rem; }.workspace-team-card p { margin: 0; color: #908981; font-size: .76rem; }.workspace-team-card header button { border: 0; padding: 0; color: #397d77; background: transparent; font: inherit; font-size: .75rem; font-weight: 750; }.workspace-team-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0 18px; }.workspace-team-list .workspace-person { border-top: 0; }.workspace-empty { padding: 15px 0 0; }
 .workspace-panel { width: min(390px, calc(100vw - 44px)); }.workspace-invite-form { display: grid; gap: 15px; }.workspace-invite-form label { display: grid; gap: 7px; color: #635d57; font-size: .76rem; font-weight: 700; }.workspace-invite-form input, .workspace-invite-success input { width: 100%; border: 1px solid #dcd7d1; border-radius: 8px; padding: 10px; color: #4d4741; background: #fff; font: inherit; font-size: .8rem; outline: none; }.workspace-invite-form input:focus { border-color: #4f817b; box-shadow: 0 0 0 3px rgba(79,129,123,.12); }.workspace-invite-form p, .workspace-invite-success p { margin: -5px 0 0; color: #807972; font-size: .77rem; line-height: 1.5; }.workspace-invite-form .clock-button { justify-self: start; padding: 10px 13px; }.workspace-invite-success { display: grid; gap: 12px; }.workspace-invite-success > button:not(.workspace-link-button) { justify-self: start; border: 0; border-radius: 8px; padding: 10px 13px; color: #fff; background: #397d77; font: inherit; font-size: .78rem; font-weight: 750; }.workspace-link-button { justify-self: start; border: 0; padding: 2px 0; color: #397d77; background: transparent; font: inherit; font-size: .75rem; font-weight: 750; }
 @media (max-width: 720px) { .collab-overview-intro { display: grid; padding: 22px; }.collab-overview-intro .clock-button { justify-self: start; }.workspace-header { padding-bottom: 20px; }.collab-overview-grid { gap: 10px; } }
+
+/* Papertrail visual system: warm, contained, and deliberately quiet. */
+:root {
+  --paper-canvas: #e8a07e;
+  --paper-canvas-deep: #df9675;
+  --paper-sidebar: #f6efe7;
+  --paper-surface: #ffffff;
+  --paper-soft: #f8f5f1;
+  --paper-mint: #e5f2ef;
+  --paper-ink: #292728;
+  --paper-muted: #7d7772;
+  --paper-line: #e9e2db;
+  --paper-shadow: 0 24px 52px rgba(105, 61, 45, .18), 0 3px 10px rgba(105, 61, 45, .06);
+  --paper-card-shadow: 0 10px 24px rgba(77, 57, 48, .08), 0 1px 3px rgba(77, 57, 48, .04);
+}
+
+body {
+  color: var(--paper-ink);
+  background: var(--paper-canvas);
+  font-family: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+}
+
+button,
+input,
+select,
+textarea { font-family: inherit; }
+
+.brand,
+.employee-summary strong,
+.time-header h1,
+.clock-card h2,
+.time-history-header h1,
+.history-day-card h2,
+.time-history-empty h2,
+.collab-overview-intro h2,
+.workspace-panel h2 {
+  font-family: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+}
+
+/* The application gets one meaningful frame on larger screens. */
+.time-app {
+  display: grid;
+  min-height: 100vh;
+  padding: 32px;
+  background: linear-gradient(135deg, var(--paper-canvas) 0%, var(--paper-canvas-deep) 100%);
+}
+
+.time-shell,
+.time-shell.sidebar-collapsed {
+  width: min(1380px, calc(100vw - 64px));
+  min-height: calc(100vh - 64px);
+  margin: auto;
+  overflow: hidden;
+  border-radius: 28px;
+  background: var(--paper-surface);
+  box-shadow: var(--paper-shadow);
+}
+
+.time-shell { grid-template-columns: 248px minmax(0, 1fr); }
+.time-shell.sidebar-collapsed { grid-template-columns: 76px minmax(0, 1fr); }
+
+.time-sidebar {
+  padding: 30px 18px 24px;
+  background: var(--paper-sidebar);
+  box-shadow: inset -1px 0 rgba(119, 91, 76, .08);
+}
+
+.sidebar-brand-row { padding: 0 7px; }
+.brand { color: var(--paper-ink); font-size: 1.22rem; letter-spacing: -.035em; }
+.brand-mark { width: 27px; height: 27px; }
+.sidebar-toggle {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(113, 89, 76, .12);
+  border-radius: 9px;
+  color: #6e625b;
+  background: rgba(255, 255, 255, .64);
+  box-shadow: none;
+}
+.sidebar-toggle:hover { color: #397d77; background: #fff; box-shadow: 0 4px 10px rgba(92, 65, 52, .08); }
+
+.employee-summary { margin: 38px 7px 34px; }
+.employee-summary > span {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--coral);
+  box-shadow: 0 5px 11px rgba(172, 92, 73, .2);
+}
+.employee-summary strong { font-size: .92rem; }
+.employee-summary small { color: #908880; }
+
+.time-nav {
+  min-height: 40px;
+  margin: 2px 0;
+  border-radius: 9px;
+  color: #746c66;
+  font-size: .8rem;
+  font-weight: 720;
+}
+.time-nav:hover { color: #373331; background: rgba(255, 255, 255, .58); box-shadow: none; }
+.time-nav.active { color: #2e2a28; background: #fff; box-shadow: 0 5px 12px rgba(99, 70, 55, .08); }
+.sidebar-section-label { margin: 23px 10px 8px; color: #9b9189; }
+.time-sidebar-footer { padding: 0 7px; }
+.time-sidebar-footer button { color: #615851; font-weight: 720; }
+.time-sidebar-footer button:hover { color: #397d77; background: transparent; box-shadow: none; }
+
+.sidebar-collapsed .time-sidebar { padding: 26px 13px; }
+.sidebar-collapsed .sidebar-brand-row { padding: 0; }
+.sidebar-collapsed .employee-summary { margin: 37px 0 31px; }
+
+.time-workspace {
+  padding: 48px clamp(34px, 5.2vw, 76px) 56px;
+  background: var(--paper-surface);
+}
+.time-header { max-width: 1120px; }
+.time-header h1 {
+  color: var(--paper-ink);
+  font-size: clamp(1.8rem, 3vw, 2.7rem);
+  letter-spacing: -.055em;
+  line-height: 1.05;
+}
+.section-kicker { color: #a57664; }
+.status-chip { border: 1px solid var(--paper-line); background: var(--paper-soft); box-shadow: none; }
+.workspace-header { border-bottom-color: var(--paper-line); }
+.workspace-actions > button,
+.workspace-header .workspace-actions > button {
+  border-color: #ddd4cc;
+  border-radius: 8px;
+  color: #514941;
+  background: #fff;
+  box-shadow: 0 3px 8px rgba(89, 62, 49, .06);
+}
+.workspace-actions > button:hover { border-color: #c9bcb2; background: #fbf8f5; }
+
+/* Distinct content has gentle depth; ordinary layout remains flat. */
+.clock-card {
+  border: 1px solid #d9e9e5;
+  border-radius: 18px;
+  background: var(--paper-mint);
+  box-shadow: var(--paper-card-shadow);
+}
+.clock-card h2 { color: #315d5a; }
+.clock-card-copy > p:last-of-type { color: #66827f; }
+.clock-button { box-shadow: 0 8px 16px rgba(47, 99, 95, .2); }
+.break-button { border: 1px solid #ded6cf; box-shadow: 0 4px 10px rgba(82, 60, 49, .08); }
+.time-metrics { gap: 16px; }
+.time-metrics article,
+.history-card,
+.history-day-card,
+.time-history-empty,
+.workspace-team-card,
+.collab-overview-grid article {
+  border-color: var(--paper-line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--paper-card-shadow);
+}
+.time-metrics article { min-height: 118px; }
+.history-card { box-shadow: var(--paper-card-shadow); }
+.history-heading button { border: 1px solid #e2d9d2; box-shadow: none; }
+.history-heading button:hover { background: var(--paper-soft); }
+.history-table td { border-top-color: #f0ebe6; }
+.no-entries { background: var(--paper-soft); }
+
+/* Dashboard cards deliberately remain compact and legible. */
+.dashboard-home-heading { margin-bottom: 38px; }
+.collabs-section { max-width: 940px; }
+.collabs-section-heading { margin-bottom: 21px; }
+.collabs-section-heading h2 { color: #3b3734; font-size: 1.05rem; font-weight: 800; }
+.collabs-section-heading p { color: var(--paper-muted); }
+.collabs-section-heading > button,
+.collab-create-row > button {
+  border-color: #d8cec6;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #fff;
+  box-shadow: 0 3px 8px rgba(89, 62, 49, .06);
+}
+.collab-create-row { border-color: var(--paper-line); border-radius: 10px; background: var(--paper-soft); }
+.collab-tile-grid { gap: 15px; }
+.collab-tile {
+  min-height: 152px;
+  border-color: var(--paper-line);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: var(--paper-card-shadow);
+  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.collab-tile:hover { border-color: #d5c9c0; background: #fff; box-shadow: 0 14px 28px rgba(77, 57, 48, .11); transform: translateY(-2px); }
+.collab-tile-icon { width: 33px; height: 33px; border-radius: 9px; background: #ce775f; }
+.collab-tile strong { color: #3b3734; font-size: .84rem; }
+.collab-tile small { color: #938980; }
+.collab-tile-create { border-color: #d9e8e5; background: #fbfdfc; box-shadow: none; }
+.collab-tile-create .collab-tile-icon { color: #4f8c86; background: #e5f2ef; }
+
+.collab-overview-intro { border-color: #d8e8e4; border-radius: 17px; background: var(--paper-mint); box-shadow: none; }
+.collab-overview-intro h2 { color: #315d5a; }
+.collab-overview-grid article,
+.workspace-team-card { box-shadow: var(--paper-card-shadow); }
+.collab-overview-grid span { font-family: inherit; font-weight: 800; }
+.workspace-panel { border-color: var(--paper-line); border-radius: 15px; box-shadow: 0 22px 48px rgba(70, 48, 39, .2); }
+.workspace-panel h2 { letter-spacing: -.04em; }
+.workspace-inbox-empty { background: var(--paper-soft); }
+
+/* Auth uses the same palette without making it look like a separate product. */
+.auth-page { box-shadow: var(--paper-shadow); }
+.auth-showcase { background: var(--paper-sidebar); }
+.auth-panel { background: #fff; }
+.auth-card { border-color: var(--paper-line); border-radius: 16px; box-shadow: var(--paper-card-shadow); }
+.auth-card h2,
+.auth-showcase h1 { font-family: var(--font-nunito), ui-sans-serif, system-ui, sans-serif; font-weight: 800; letter-spacing: -.05em; }
+.auth-form input { border-color: #ded5cd; }
+
+.time-history-page { background: #fff; }
+.time-history-header h1,
+.history-day-card h2 { letter-spacing: -.045em; }
+.history-day-card { box-shadow: var(--paper-card-shadow); }
+
+@media (max-width: 760px) {
+  .time-app { padding: 0; background: #fff; }
+  .time-shell,
+  .time-shell.sidebar-collapsed { width: 100%; min-height: 100vh; border-radius: 0; box-shadow: none; }
+  .time-sidebar,
+  .sidebar-collapsed .time-sidebar { padding: 15px 18px; background: var(--paper-sidebar); }
+  .time-workspace { padding: 34px 27px 44px; }
+}
+
+@media (max-width: 620px) {
+  .time-workspace { padding: 29px 19px 40px; }
+  .time-header h1 { font-size: 2rem; }
+  .collab-tile-grid { gap: 11px; }
+  .collab-tile { min-height: 138px; padding: 14px; }
+}
