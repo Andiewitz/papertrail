@@ -8,6 +8,8 @@ import type { DashboardStats } from "@/lib/dashboard";
 
 type User = { id: string; email: string; displayName: string | null };
 export type Collab = { id: string; name: string; role: "admin" | "co_admin" | "member" };
+export type TimeBreak = { id: number; startedAt: number; endedAt: number | null };
+export type TimeEntry = { id: number; clockIn: number; clockOut: number | null; breaks: TimeBreak[] };
 type DashboardContext = {
   user: User; collabs: Collab[]; loading: boolean; error: string;
   refreshCollabs: () => Promise<void>;
@@ -19,9 +21,15 @@ type DashboardContext = {
   dashboardStatsLoading: boolean;
   loadDashboardStats: (workspaceId: string) => Promise<void>;
   invalidateDashboardStats: () => void;
+  timeEntries: TimeEntry[] | null;
+  timeEntriesError: string;
+  timeEntriesLoading: boolean;
+  loadTimeEntries: (workspaceId: string, options?: { force?: boolean }) => Promise<void>;
+  updateTimeEntry: (entry: TimeEntry) => void;
 };
 const Context = createContext<DashboardContext | null>(null);
 const STATS_CACHE_MS = 60_000;
+const TIME_ENTRIES_CACHE_MS = 60_000;
 export function useDashboard() {
   const context = useContext(Context);
   if (!context) throw new Error("Dashboard content must be inside DashboardShell.");
@@ -52,6 +60,11 @@ export default function DashboardShell({ children, initialCollabs, initialUser }
   const [dashboardStatsLoading, setDashboardStatsLoading] = useState(false);
   const dashboardStatsCache = useRef<{ workspaceId: string; value: DashboardStats; fetchedAt: number } | null>(null);
   const dashboardStatsRequest = useRef<Promise<void> | null>(null);
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[] | null>(null);
+  const [timeEntriesError, setTimeEntriesError] = useState("");
+  const [timeEntriesLoading, setTimeEntriesLoading] = useState(false);
+  const timeEntriesCache = useRef<{ workspaceId: string; value: TimeEntry[]; fetchedAt: number } | null>(null);
+  const timeEntriesRequest = useRef<Promise<void> | null>(null);
   const requireSignIn = useCallback(() => { setUsingServerCollabs(false); setUser(null); }, []);
   const refreshCollabs = useCallback(async () => {
     setLoading(true); setError("");
@@ -76,6 +89,11 @@ export default function DashboardShell({ children, initialCollabs, initialUser }
     setDashboardStats(null);
     setDashboardStatsError("");
     setDashboardStatsLoading(false);
+    timeEntriesCache.current = null;
+    timeEntriesRequest.current = null;
+    setTimeEntries(null);
+    setTimeEntriesError("");
+    setTimeEntriesLoading(false);
   }, [user?.id]);
   function toggleSidebar() {
     setCollapsed((current) => { localStorage.setItem("papertrail-sidebar", current ? "expanded" : "collapsed"); return !current; });
@@ -107,6 +125,33 @@ export default function DashboardShell({ children, initialCollabs, initialUser }
     dashboardStatsRequest.current = request;
     return request;
   }, [requireSignIn]);
+  const loadTimeEntries = useCallback(async (workspaceId: string, options?: { force?: boolean }) => {
+    const cached = timeEntriesCache.current;
+    if (!options?.force && cached?.workspaceId === workspaceId && Date.now() - cached.fetchedAt < TIME_ENTRIES_CACHE_MS) {
+      setTimeEntries(cached.value);
+      return;
+    }
+    if (timeEntriesRequest.current) return timeEntriesRequest.current;
+    const request = (async () => {
+      setTimeEntriesLoading(true); setTimeEntriesError("");
+      try {
+        const response = await fetch(`/api/collabs/${workspaceId}/time`, { cache: "no-store" });
+        const data = await response.json();
+        if (response.status === 401) { requireSignIn(); return; }
+        if (!response.ok) throw new Error(data.error ?? "Attendance records could not be loaded.");
+        timeEntriesCache.current = { workspaceId, value: data.entries, fetchedAt: Date.now() };
+        setTimeEntries(data.entries);
+      } catch (caught) { setTimeEntriesError(caught instanceof Error ? caught.message : "Attendance records could not be loaded."); }
+      finally { setTimeEntriesLoading(false); timeEntriesRequest.current = null; }
+    })();
+    timeEntriesRequest.current = request;
+    return request;
+  }, [requireSignIn]);
+  const updateTimeEntry = useCallback((updatedEntry: TimeEntry) => {
+    const apply = (items: TimeEntry[]) => [...items.filter((item) => item.id !== updatedEntry.id), updatedEntry].sort((left, right) => right.clockIn - left.clockIn);
+    if (timeEntriesCache.current) timeEntriesCache.current = { ...timeEntriesCache.current, value: apply(timeEntriesCache.current.value), fetchedAt: Date.now() };
+    setTimeEntries((current) => current ? apply(current) : [updatedEntry]);
+  }, []);
   async function signOut() {
     try {
       const response = await fetch("/api/auth/sign-out", { method: "POST" });
@@ -118,7 +163,7 @@ export default function DashboardShell({ children, initialCollabs, initialUser }
   const name = user.displayName ?? user.email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   const workspace = collabs[0];
   const updateWorkspaceName = (name: string) => setCollabs((current) => current.map((collab) => collab.id === workspace?.id ? { ...collab, name } : collab));
-  return <Context.Provider value={{ user, collabs, loading, error, refreshCollabs, requireSignIn, updateUser: setUser, updateWorkspaceName, dashboardStats, dashboardStatsError, dashboardStatsLoading, loadDashboardStats, invalidateDashboardStats }}>
+  return <Context.Provider value={{ user, collabs, loading, error, refreshCollabs, requireSignIn, updateUser: setUser, updateWorkspaceName, dashboardStats, dashboardStatsError, dashboardStatsLoading, loadDashboardStats, invalidateDashboardStats, timeEntries, timeEntriesError, timeEntriesLoading, loadTimeEntries, updateTimeEntry }}>
     <main className="time-app unified-dashboard">
       <div className={`time-shell${collapsed ? " sidebar-collapsed" : ""}`}>
         <aside className="time-sidebar">

@@ -1,11 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useDashboard } from "@/client/dashboard-shell";
+import { useDashboard, type TimeEntry } from "@/client/dashboard-shell";
 import Link from "next/link";
-
-type Break = { id: number; startedAt: number; endedAt: number | null };
-type TimeEntry = { id: number; clockIn: number; clockOut: number | null; breaks: Break[] };
 
 function duration(entry: TimeEntry, now: number) {
   const breakTime = entry.breaks.reduce((total, item) => total + Math.max(0, (item.endedAt ?? now) - item.startedAt), 0);
@@ -18,29 +15,16 @@ function formatDuration(milliseconds: number) {
 }
 
 export default function TimeHistoryPage({ collabId }: { collabId: string }) {
-  const { collabs, loading: collabsLoading, requireSignIn } = useDashboard();
+  const { collabs, loading: collabsLoading, timeEntries, timeEntriesError: error, timeEntriesLoading: loading, loadTimeEntries } = useDashboard();
   const collab = collabs.find((item) => item.id === collabId);
   const canTrackTime = collab?.role === "member" || collab?.role === "co_admin";
-  const [entries, setEntries] = useState<TimeEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [now, setNow] = useState(() => Date.now());
 
-  const load = useCallback(async () => {
-    setLoading(true); setError("");
-    try {
-      if (!canTrackTime) return;
-      const response = await fetch(`/api/collabs/${collabId}/time`, { cache: "no-store" });
-      const data = await response.json();
-      if (response.status === 401) { requireSignIn(); return; }
-      if (!response.ok) throw new Error(data.error ?? "Your time history could not be loaded.");
-      setEntries(data.entries);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Your time history could not be loaded."); }
-    finally { setLoading(false); }
-  }, [canTrackTime, collabId, requireSignIn]);
-
-  useEffect(() => { void load(); }, [load]);
+  const load = useCallback(() => canTrackTime ? loadTimeEntries(collabId, { force: true }) : Promise.resolve(), [canTrackTime, collabId, loadTimeEntries]);
+  useEffect(() => { if (canTrackTime) void loadTimeEntries(collabId); }, [canTrackTime, collabId, loadTimeEntries]);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
+
+  const entries = useMemo(() => timeEntries ?? [], [timeEntries]);
 
   const days = useMemo(() => {
     const formatter = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });

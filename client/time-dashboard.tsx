@@ -3,10 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
-import { useDashboard } from "@/client/dashboard-shell";
-
-type Break = { id: number; startedAt: number; endedAt: number | null };
-type TimeEntry = { id: number; clockIn: number; clockOut: number | null; breaks: Break[] };
+import { useDashboard, type TimeEntry } from "@/client/dashboard-shell";
 type Member = { id: string; email: string; displayName: string | null; role: string; status: string };
 type Notice = { type: "error" | "success"; text: string } | null;
 
@@ -46,11 +43,10 @@ function startOfWeek(date: Date) {
 function memberName(member: Member) { return member.displayName ?? member.email; }
 
 export default function TimeDashboard({ collabId }: { collabId: string }) {
-  const { collabs, loading: collabsLoading, requireSignIn, invalidateDashboardStats } = useDashboard();
+  const { collabs, loading: collabsLoading, requireSignIn, invalidateDashboardStats, timeEntries, timeEntriesError, timeEntriesLoading: loading, loadTimeEntries, updateTimeEntry } = useDashboard();
   const selectedCollab = collabs.find((collab) => collab.id === collabId);
   const canTrackTime = selectedCollab?.role === "member" || selectedCollab?.role === "co_admin";
   const canInvite = selectedCollab?.role === "admin" || selectedCollab?.role === "co_admin";
-  const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [membersOpen, setMembersOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
@@ -60,28 +56,18 @@ export default function TimeDashboard({ collabId }: { collabId: string }) {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteLink, setInviteLink] = useState("");
-  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [notice, setNotice] = useState<Notice>(null);
   const reduceMotion = useReducedMotion();
   const entrance = reduceMotion ? { opacity: 0 } : { opacity: 0, y: 18 };
 
-  const loadEntries = useCallback(async () => {
-    setLoading(true);
-    try {
-      if (!canTrackTime) return;
-      const response = await fetch(`/api/collabs/${collabId}/time`, { cache: "no-store" });
-      const data = await response.json();
-      if (response.status === 401) { requireSignIn(); return; }
-      if (!response.ok) throw new Error(`${data.error ?? "Attendance records could not be loaded."}${data.debug ? ` (${data.debug})` : ""}`);
-      setEntries(data.entries);
-    } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Attendance records could not be loaded." }); }
-    finally { setLoading(false); }
-  }, [canTrackTime, collabId, requireSignIn]);
-
-  useEffect(() => { void loadEntries(); }, [loadEntries]);
+  const loadEntries = useCallback(() => canTrackTime ? loadTimeEntries(collabId, { force: true }) : Promise.resolve(), [canTrackTime, collabId, loadTimeEntries]);
+  useEffect(() => { if (canTrackTime) void loadTimeEntries(collabId); }, [canTrackTime, collabId, loadTimeEntries]);
+  useEffect(() => { if (timeEntriesError) setNotice({ type: "error", text: timeEntriesError }); }, [timeEntriesError]);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30000); return () => window.clearInterval(timer); }, []);
+
+  const entries = useMemo(() => timeEntries ?? [], [timeEntries]);
 
   const loadMembers = useCallback(async () => {
     if (!selectedCollab) return;
@@ -135,10 +121,7 @@ export default function TimeDashboard({ collabId }: { collabId: string }) {
         if (response.status === 409) void loadEntries();
         throw new Error(data.error ?? "Your time entry could not be updated.");
       }
-      setEntries((current) => {
-        const withoutUpdatedEntry = current.filter((entry) => entry.id !== data.entry.id);
-        return action === "clock-in" ? [data.entry, ...withoutUpdatedEntry] : [...withoutUpdatedEntry, data.entry].sort((left, right) => right.clockIn - left.clockIn);
-      });
+      updateTimeEntry(data.entry);
       invalidateDashboardStats();
       setNow(Date.now());
       setNotice({ type: "success", text: action === "clock-in" ? data.alreadyClockedIn ? "Your active shift is already recorded." : "You’re clocked in. Have a great shift." : data.alreadyClockedOut ? "Your clock-out was already recorded." : "You’re clocked out. Your hours have been recorded." });
@@ -152,8 +135,9 @@ export default function TimeDashboard({ collabId }: { collabId: string }) {
     try {
       const response = await fetch(`/api/collabs/${collabId}/time`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: activeBreak ? "break-end" : "break-start" }) });
       const data = await response.json();
+      if (response.status === 401) { requireSignIn(); return; }
       if (!response.ok) throw new Error(data.error ?? "Your break could not be updated.");
-      setEntries((current) => current.map((item) => item.id === data.entry.id ? data.entry : item));
+      updateTimeEntry(data.entry);
       invalidateDashboardStats();
       setNow(Date.now());
       setNotice({ type: "success", text: activeBreak ? "Your break has ended. You’re back on the clock." : "Your break has started. Paid time is paused." });
