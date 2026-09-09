@@ -93,9 +93,15 @@ try {
   assert.ok(ownerCookieHeader?.includes("HttpOnly"), "sign-in should return an HttpOnly session cookie");
   const ownerCookie = ownerCookieHeader.split(";", 1)[0];
   const ownerHeaders = { cookie: ownerCookie, origin, "content-type": "application/json", "x-forwarded-for": "203.0.113.11" };
+  const initialCollabs = await json(await fetch(`${baseUrl}/api/collabs`, { headers: ownerHeaders }), 200, "new account Collabs");
+  assert.deepEqual(initialCollabs.collabs, [], "ordinary registration must not create a default Collab");
   const createdCollab = await json(await fetch(`${baseUrl}/api/collabs`, { method: "POST", headers: ownerHeaders, body: JSON.stringify({ name: "Integration Collab" }) }), 201, "collab creation");
   const collabId = createdCollab.collab.id;
   const employeeTimeUrl = `${baseUrl}/api/collabs/${collabId}/time`;
+  for (const action of ["clock-in", "clock-out", "break-start", "break-end"]) {
+    await json(await fetch(employeeTimeUrl, { method: "POST", headers: ownerHeaders, body: JSON.stringify({ action }) }), 403, `owner cannot ${action}`);
+  }
+  await json(await fetch(employeeTimeUrl, { headers: ownerHeaders }), 403, "owner has no personal timekeeping");
 
   const directory = await json(await fetch(`${baseUrl}/api/collabs/${collabId}/members`, { headers: { cookie: ownerCookie } }), 200, "collab directory");
   assert.equal(directory.members.length, 1);
@@ -185,6 +191,18 @@ try {
   const employee = (await json(await fetch(`${baseUrl}/api/collabs/${collabId}/members`, { headers: { cookie: ownerCookie } }), 200, "updated Collab directory")).members.find((person) => person.email === "employee@example.test");
   assert.ok(employee, "new employee should appear in the directory");
   await json(await fetch(`${baseUrl}/api/collabs/${collabId}/members/${employee.id}`, {
+    method: "PATCH", headers: ownerHeaders, body: JSON.stringify({ role: "co_admin" }),
+  }), 200, "promote member to co-admin");
+  // Role changes revoke sessions; sign in again to test the promoted membership.
+  const coAdminLogin = await fetch(`${baseUrl}/api/auth/sign-in`, {
+    method: "POST", headers: authenticatedHeaders,
+    body: JSON.stringify({ email: "employee@example.test", password: "IntegrationPassword!2026" }),
+  });
+  await json(coAdminLogin, 200, "co-admin sign-in");
+  const coAdminHeaders = { ...authenticatedHeaders, cookie: coAdminLogin.headers.get("set-cookie").split(";", 1)[0] };
+  const coAdminShift = await json(await fetch(employeeTimeUrl, { method: "POST", headers: coAdminHeaders, body: JSON.stringify({ action: "clock-in" }) }), 201, "co-admin clock in");
+  await json(await fetch(employeeTimeUrl, { method: "POST", headers: coAdminHeaders, body: JSON.stringify({ action: "clock-out", entryId: coAdminShift.entry.id }) }), 200, "co-admin clock out");
+  await json(await fetch(`${baseUrl}/api/collabs/${collabId}/members/${employee.id}`, {
     method: "PATCH", headers: ownerHeaders, body: JSON.stringify({ status: "deactivated" }),
   }), 200, "employee deactivation");
   await json(await fetch(employeeTimeUrl, { headers: { cookie } }), 401, "deactivated employee Collab access");
@@ -199,7 +217,7 @@ try {
   const afterSignOut = await json(await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: ownerCookie } }), 200, "signed-out session");
   assert.equal(afterSignOut.user, null);
 
-  console.log("Integration flow passed: organization bootstrap, invitations, roles, deactivation, auth, session, clock-in/out idempotency, history, origin protection, and sign-out.");
+  console.log("Integration flow passed: no default Collab, explicit creation, owner timekeeping denied, member/co-admin timekeeping, invitations, deactivation, auth, idempotency, history, origin protection, and sign-out.");
 } finally {
   server.kill("SIGTERM");
   await Promise.race([once(server, "exit"), new Promise((resolve) => setTimeout(resolve, 5_000))]);

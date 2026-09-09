@@ -1,7 +1,7 @@
-import { assertSameOrigin, currentUser } from "@/lib/auth";
+import { assertSameOrigin, currentCollabUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logError } from "@/lib/log";
-import { requireCollabPermission, CollabAccessError } from "@/lib/collab";
+import { CollabAccessError } from "@/lib/collab";
 import type { Client, Row } from "@libsql/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -12,33 +12,31 @@ type Break = { id: number; startedAt: number; endedAt: number | null };
 function entry(row: Row, breaks: Break[] = []) { return { id: Number(row.id), clockIn: Number(row.clock_in), clockOut: row.clock_out === null ? null : Number(row.clock_out), breaks }; }
 
 async function withBreaks(client: Client, entryId: number) {
-  const result = await client.execute({ sql: "SELECT id, clock_in, clock_out FROM time_entries WHERE id = ?", args: [entryId] });
-  if (!result.rows[0]) return null;
-  const breaks = await client.execute({ sql: "SELECT id, started_at, ended_at FROM break_entries WHERE time_entry_id = ? ORDER BY started_at", args: [entryId] });
-  return entry(result.rows[0], breaks.rows.map((item) => ({ id: Number(item.id), startedAt: Number(item.started_at), endedAt: item.ended_at === null ? null : Number(item.ended_at) })));
+  const result = await client.execute({ sql: "SELECT time_entries.id, time_entries.clock_in, time_entries.clock_out, break_entries.id AS break_id, break_entries.started_at AS break_started_at, break_entries.ended_at AS break_ended_at FROM time_entries LEFT JOIN break_entries ON break_entries.time_entry_id = time_entries.id WHERE time_entries.id = ? ORDER BY break_entries.started_at", args: [entryId] });
+  const first = result.rows[0];
+  if (!first) return null;
+  return entry(first, result.rows.filter((row) => row.break_id !== null).map((row) => ({ id: Number(row.break_id), startedAt: Number(row.break_started_at), endedAt: row.break_ended_at === null ? null : Number(row.break_ended_at) })));
 }
 
 async function allEntries(client: Client, userId: string, collabId: string) {
-  const result = await client.execute({ sql: "SELECT id, clock_in, clock_out FROM time_entries WHERE user_id = ? AND collab_id = ? ORDER BY clock_in DESC LIMIT 90", args: [userId, collabId] });
-  const entries = result.rows.map((row) => entry(row));
-  if (!entries.length) return entries;
-  const breaks = await client.execute({ sql: `SELECT id, time_entry_id, started_at, ended_at FROM break_entries WHERE time_entry_id IN (${entries.map(() => "?").join(", ")}) ORDER BY started_at`, args: entries.map((item) => item.id) });
-  const byEntry = new Map<number, Break[]>();
-  for (const item of breaks.rows) {
-    const entryId = Number(item.time_entry_id);
-    byEntry.set(entryId, [...(byEntry.get(entryId) ?? []), { id: Number(item.id), startedAt: Number(item.started_at), endedAt: item.ended_at === null ? null : Number(item.ended_at) }]);
+  const result = await client.execute({ sql: "SELECT time_entries.id, time_entries.clock_in, time_entries.clock_out, break_entries.id AS break_id, break_entries.started_at AS break_started_at, break_entries.ended_at AS break_ended_at FROM time_entries LEFT JOIN break_entries ON break_entries.time_entry_id = time_entries.id WHERE time_entries.user_id = ? AND time_entries.collab_id = ? AND time_entries.id IN (SELECT id FROM time_entries WHERE user_id = ? AND collab_id = ? ORDER BY clock_in DESC LIMIT 90) ORDER BY time_entries.clock_in DESC, break_entries.started_at", args: [userId, collabId, userId, collabId] });
+  const grouped = new Map<number, { id: number; clockIn: number; clockOut: number | null; breaks: Break[] }>();
+  for (const row of result.rows) {
+    const id = Number(row.id);
+    const item = grouped.get(id) ?? entry(row);
+    if (row.break_id !== null) item.breaks.push({ id: Number(row.break_id), startedAt: Number(row.break_started_at), endedAt: row.break_ended_at === null ? null : Number(row.break_ended_at) });
+    grouped.set(id, item);
   }
-  return entries.map((item) => ({ ...item, breaks: byEntry.get(item.id) ?? [] }));
+  return [...grouped.values()];
 }
 
 function collabIdFrom(request: Request) { return request.headers.get("x-papertrail-collab") ?? ""; }
 
 export async function GET(request: Request) {
   try {
-    const user = await currentUser();
-    if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     const collabId = collabIdFrom(request); if (!collabId) return NextResponse.json({ error: "Choose a Collab first." }, { status: 400 });
-    await requireCollabPermission(user.id, collabId, "view_own_time");
+    const user = await currentCollabUser(collabId, "view_own_time");
+    if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     const entries = await allEntries(await db(), user.id, collabId);
     return NextResponse.json({ entries, activeEntry: entries.find((item) => item.clockOut === null) ?? null });
   } catch (error) {
@@ -54,10 +52,9 @@ const schema = z.object({ action: z.enum(["clock-in", "clock-out", "break-start"
 export async function POST(request: Request) {
   try {
     if (!assertSameOrigin(request)) return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
-    const user = await currentUser();
-    if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     const collabId = collabIdFrom(request); if (!collabId) return NextResponse.json({ error: "Choose a Collab first." }, { status: 400 });
-    await requireCollabPermission(user.id, collabId, "clock_self");
+    const user = await currentCollabUser(collabId, "clock_self");
+    if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     const input = schema.safeParse(await request.json());
     if (!input.success) return NextResponse.json({ error: "Choose a valid timekeeping action." }, { status: 400 });
     const client = await db(); const now = Date.now();

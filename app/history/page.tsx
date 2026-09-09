@@ -1,5 +1,5 @@
-import TimeHistoryPage from "@/client/time-history-page";
+import { redirect } from "next/navigation";
 
 export default function HistoryPage() {
-  return <TimeHistoryPage />;
+  redirect("/");
 }

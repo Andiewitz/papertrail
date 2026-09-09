@@ -12,7 +12,7 @@ export class CollabAccessError extends Error {
 }
 
 const permissions: Record<CollabRole, ReadonlySet<CollabPermission>> = {
-  admin: new Set(["view_directory", "clock_self", "view_own_time", "view_team_time", "invite_members", "manage_members", "export_team_time", "approve_time", "configure_collab", "transfer_admin", "delete_collab"]),
+  admin: new Set(["view_directory", "view_team_time", "invite_members", "manage_members", "export_team_time", "approve_time", "configure_collab", "transfer_admin", "delete_collab"]),
   co_admin: new Set(["view_directory", "clock_self", "view_own_time", "view_team_time", "invite_members", "manage_members", "export_team_time", "approve_time"]),
   member: new Set(["view_directory", "clock_self", "view_own_time"]),
 };
